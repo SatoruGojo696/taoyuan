@@ -884,6 +884,17 @@ export const PROCESSING_RECIPES: ProcessingRecipeDef[] = [
     processingDays: 1,
     description: '从韭菜中提取种子。'
   },
+  {
+    id: 'seed_from_ancient_fruit',
+    machineType: 'seed_maker',
+    name: '远古种子',
+    inputItemId: 'ancient_fruit',
+    inputQuantity: 1,
+    outputItemId: 'ancient_seed',
+    outputQuantity: 1,
+    processingDays: 2,
+    description: '从远古水果中提取种子。'
+  },
   // 结晶复制机
   {
     id: 'dup_quartz',

@@ -12,7 +12,7 @@ import { WEATHER_TOTEMS } from './totems'
 
 /** 从作物定义自动生成种子物品（排除已手动定义的种子） */
 const SEED_ITEMS: ItemDef[] = CROPS.filter(
-  crop => crop.seedId !== 'ancient_seed' && crop.seedId !== 'hanhai_cactus_seed' && crop.seedId !== 'hanhai_date_seed'
+  crop => crop.seedId !== 'hanhai_cactus_seed' && crop.seedId !== 'hanhai_date_seed'
 ).map(crop => ({
   id: crop.seedId,
   name: `${crop.name}种子`,
