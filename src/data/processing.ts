@@ -1,4 +1,13 @@
-import type { ProcessingMachineDef, ProcessingRecipeDef, SprinklerDef, FertilizerDef, BaitDef, TackleDef, BombDef } from '@/types'
+import type {
+  ProcessingMachineDef,
+  ProcessingRecipeDef,
+  MachineUpgradeDef,
+  SprinklerDef,
+  FertilizerDef,
+  BaitDef,
+  TackleDef,
+  BombDef
+} from '@/types'
 
 /** 加工机器定义 */
 export const PROCESSING_MACHINES: ProcessingMachineDef[] = [
@@ -224,6 +233,37 @@ export const PROCESSING_MACHINES: ProcessingMachineDef[] = [
     craftMoney: 200
   }
 ]
+
+/** 加工设备升级费用（level 为目标等级，每级产出 +1 份） */
+export const MACHINE_UPGRADES: MachineUpgradeDef[] = [
+  {
+    level: 1,
+    money: 10000,
+    materials: [
+      { itemId: 'iron_bar', quantity: 10 },
+      { itemId: 'wood', quantity: 50 }
+    ]
+  },
+  {
+    level: 2,
+    money: 50000,
+    materials: [
+      { itemId: 'gold_bar', quantity: 10 },
+      { itemId: 'wood', quantity: 100 }
+    ]
+  },
+  {
+    level: 3,
+    money: 200000,
+    materials: [
+      { itemId: 'iridium_bar', quantity: 10 },
+      { itemId: 'prismatic_shard', quantity: 1 }
+    ]
+  }
+]
+
+/** 加工设备最高等级（等级从 1 起连续编号） */
+export const MAX_MACHINE_LEVEL = MACHINE_UPGRADES.length
 
 /** 加工配方 */
 export const PROCESSING_RECIPES: ProcessingRecipeDef[] = [

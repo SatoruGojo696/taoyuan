@@ -44,6 +44,11 @@ const router = createRouter({
           component: () => import('@/views/game/ShopView.vue')
         },
         {
+          path: 'trade',
+          name: 'trade',
+          component: () => import('@/views/game/TradeView.vue')
+        },
+        {
           path: 'forage',
           name: 'forage',
           component: () => import('@/views/game/ForageView.vue')

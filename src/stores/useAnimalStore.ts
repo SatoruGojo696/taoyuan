@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { AnimalBuildingType, AnimalType, Animal, Quality, PetState, PetType, IncubationState } from '@/types'
+import type { AnimalBuildingType, AnimalType, Animal, Quality, PetState, PetType, PetAbilityId, IncubationState } from '@/types'
 import {
   ANIMAL_BUILDINGS,
   ANIMAL_DEFS,
@@ -20,11 +20,23 @@ import {
   HORSE_BOND_GRAZE_BONUS,
   type HorseBreed
 } from '@/data/horses'
+import {
+  PET_MAX_FRIENDSHIP,
+  PET_PETTING_FRIENDSHIP,
+  PET_PETTING_STAMINA,
+  PET_NEGLECT_FRIENDSHIP_LOSS,
+  PET_FETCH_ITEMS,
+  CROW_VISIT_CHANCE,
+  isPetAbilityUnlocked,
+  getPetFetchChance,
+  getCatPestLimit
+} from '@/data/pets'
 import { usePlayerStore } from './usePlayerStore'
 import { useInventoryStore } from './useInventoryStore'
 import { useGameStore } from './useGameStore'
 import { useSkillStore } from './useSkillStore'
 import { useHiddenNpcStore } from './useHiddenNpcStore'
+import { useFarmStore } from './useFarmStore'
 import { getCombinedItemCount, removeCombinedItem } from '@/composables/useCombinedInventory'
 
 export const useAnimalStore = defineStore('animal', () => {
@@ -250,8 +262,8 @@ export const useAnimalStore = defineStore('animal', () => {
     return true
   }
 
-  /** 一键抚摸所有动物+宠物 */
-  const petAllAnimals = (): number => {
+  /** 一键抚摸所有动物+宠物，返回抚摸数量与摸宠物恢复的体力 */
+  const petAllAnimals = (): { count: number; staminaGained: number } => {
     const coopmasterBonus = useSkillStore().getSkill('farming').perk10 === 'coopmaster' ? 1.5 : 1.0
     let count = 0
     for (const animal of animals.value) {
@@ -260,12 +272,12 @@ export const useAnimalStore = defineStore('animal', () => {
       animal.friendship = Math.min(1000, animal.friendship + Math.floor(5 * coopmasterBonus))
       count++
     }
+    let staminaGained = 0
     if (pet.value && !pet.value.wasPetted) {
-      pet.value.wasPetted = true
-      pet.value.friendship = Math.min(1000, pet.value.friendship + 5)
+      staminaGained = strokePet(pet.value)
       count++
     }
-    return count
+    return { count, staminaGained }
   }
 
   // ============================================================
@@ -449,33 +461,76 @@ export const useAnimalStore = defineStore('animal', () => {
     pet.value = { type, name, friendship: 0, wasPetted: false }
   }
 
-  /** 抚摸宠物 */
-  const petThePet = (): boolean => {
-    if (!pet.value || pet.value.wasPetted) return false
-    pet.value.wasPetted = true
-    pet.value.friendship = Math.min(1000, pet.value.friendship + 5)
-    return true
+  /** 宠物当前是否已解锁某项能力 */
+  const hasPetAbility = (id: PetAbilityId): boolean => {
+    if (!pet.value) return false
+    return isPetAbilityUnlocked(pet.value.type, id, pet.value.friendship)
   }
 
-  /** 每日宠物更新 */
-  const dailyPetUpdate = (): { item?: string } => {
-    if (!pet.value) return {}
+  /** 摸一下宠物：加好感、恢复体力（不超上限），返回实际恢复的体力 */
+  const strokePet = (target: PetState): number => {
+    target.wasPetted = true
+    target.friendship = Math.min(PET_MAX_FRIENDSHIP, target.friendship + PET_PETTING_FRIENDSHIP)
+    const playerStore = usePlayerStore()
+    const before = playerStore.stamina
+    playerStore.restoreStamina(PET_PETTING_STAMINA)
+    return playerStore.stamina - before
+  }
+
+  /** 抚摸宠物 */
+  const petThePet = (): { success: boolean; staminaGained: number } => {
+    if (!pet.value || pet.value.wasPetted) return { success: false, staminaGained: 0 }
+    return { success: true, staminaGained: strokePet(pet.value) }
+  }
+
+  /**
+   * 狗看家：代替当晚的乌鸦袭击判定。乌鸦按原概率来（有稻草人或田里没作物时不来），
+   * 来了就被赶走，作物无损。返回是否赶走了乌鸦。
+   */
+  const dogScaresOffCrow = (): boolean => {
+    if (!hasPetAbility('guard')) return false
+    const farmStore = useFarmStore()
+    if (farmStore.scarecrows > 0) return false
+    if (Math.random() > CROW_VISIT_CHANCE) return false
+    return farmStore.plots.some(p => !!p.cropId && (p.state === 'planted' || p.state === 'growing' || p.state === 'harvestable'))
+  }
+
+  /** 猫捕虫：清除普通农田的虫害，先清感染最久的，返回清除处数 */
+  const catchFarmPests = (limit: number): number => {
+    const farmStore = useFarmStore()
+    const targets = farmStore.plots
+      .filter(p => p.infested)
+      .sort((a, b) => b.infestedDays - a.infestedDays)
+      .slice(0, limit)
+    let cleared = 0
+    for (const plot of targets) {
+      if (farmStore.curePest(plot.id)) cleared++
+    }
+    return cleared
+  }
+
+  /** 叼物：按好感档位掷骰，命中则放入背包，返回物品 id */
+  const rollPetFetch = (current: PetState): string | undefined => {
+    if (Math.random() >= getPetFetchChance(current.friendship)) return undefined
+    const pool = PET_FETCH_ITEMS[current.type]
+    const item = pool[Math.floor(Math.random() * pool.length)]
+    if (!item || !useInventoryStore().addItem(item, 1)) return undefined
+    return item
+  }
+
+  /** 每日宠物更新：好感结算、猫捕虫、叼物 */
+  const dailyPetUpdate = (): { item?: string; pestsCleared: number } => {
+    const current = pet.value
+    if (!current) return { pestsCleared: 0 }
 
     // 未抚摸扣好感
-    if (!pet.value.wasPetted) {
-      pet.value.friendship = Math.max(0, pet.value.friendship - 2)
+    if (!current.wasPetted) {
+      current.friendship = Math.max(0, current.friendship - PET_NEGLECT_FRIENDSHIP_LOSS)
     }
-    pet.value.wasPetted = false
+    current.wasPetted = false
 
-    // 高好感带回采集物
-    if (pet.value.friendship >= 800 && Math.random() < 0.1) {
-      const finds = ['herb', 'wild_berry', 'pine_cone', 'bamboo_shoot', 'wild_mushroom']
-      const item = finds[Math.floor(Math.random() * finds.length)]!
-      const inventoryStore = useInventoryStore()
-      inventoryStore.addItem(item, 1)
-      return { item }
-    }
-    return {}
+    const pestsCleared = hasPetAbility('pest') ? catchFarmPests(getCatPestLimit(current.friendship)) : 0
+    return { item: rollPetFetch(current), pestsCleared }
   }
 
   // ============================================================
@@ -926,7 +981,9 @@ export const useAnimalStore = defineStore('animal', () => {
     startBarnIncubation,
     dailyBarnIncubatorUpdate,
     adoptPet,
+    hasPetAbility,
     petThePet,
+    dogScaresOffCrow,
     dailyPetUpdate,
     grazeAnimals,
     dailyUpdate,

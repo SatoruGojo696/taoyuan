@@ -50,14 +50,14 @@
         <div
           v-for="npc in NPCS"
           :key="npc.id"
-          class="border border-accent/20 rounded-xs p-1.5 md:p-2 transition-colors"
-          :class="[npcAvailable(npc.id) ? 'cursor-pointer hover:bg-accent/5' : 'opacity-50', 'text-center md:text-left']"
+          class="border border-accent/20 rounded-xs p-1.5 md:p-2 transition-colors cursor-pointer hover:bg-accent/5"
+          :class="[npcAvailable(npc.id) ? '' : 'opacity-50', 'text-center md:text-left']"
           @click="handleSelectNpc(npc.id)"
         >
           <!-- 移动端：紧凑布局 -->
           <div class="md:hidden">
             <p class="text-xs truncate" :class="levelColor(npcStore.getFriendshipLevel(npc.id))">
-              {{ npc.name }}
+              {{ npcStore.getNpcDisplayName(npc.id) }}
             </p>
             <p class="text-[10px] flex items-center justify-center" :class="heartCount(npc.id) > 0 ? 'text-danger' : 'text-muted/30'">
               {{ heartCount(npc.id) }}
@@ -78,7 +78,7 @@
           <div class="hidden md:block">
             <div class="flex items-center justify-between">
               <span class="text-xs" :class="levelColor(npcStore.getFriendshipLevel(npc.id))">
-                {{ npc.name }}
+                {{ npcStore.getNpcDisplayName(npc.id) }}
                 <span v-if="npcStore.getNpcState(npc.id)?.married" class="text-danger text-[10px] ml-0.5">[伴侣]</span>
                 <span v-else-if="npcStore.getNpcState(npc.id)?.dating" class="text-danger/70 text-[10px] ml-0.5">[约会中]</span>
                 <span v-else-if="npcStore.getNpcState(npc.id)?.zhiji" class="text-accent text-[10px] ml-0.5">[知己]</span>
@@ -198,11 +198,14 @@
     <Transition name="panel-fade">
       <div v-if="selectedNpc" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" @click.self="selectedNpc = null">
         <div class="game-panel max-w-lg w-full max-h-[80vh] overflow-y-auto">
-          <!-- 头部：名称 + 关闭 -->
+          <!-- 头部：名称 + 备注 + 关闭 -->
           <div class="flex justify-between items-start mb-2">
-            <div>
+            <div class="min-w-0 mr-2">
               <p class="text-sm text-accent">
-                {{ selectedNpcDef?.name }}
+                {{ selectedDisplayName }}
+                <button v-if="!editingNote" class="text-muted hover:text-accent align-middle" aria-label="备注" @click="startEditNote">
+                  <Pencil :size="12" />
+                </button>
                 <span class="text-xs text-muted ml-0.5">{{ selectedNpcDef?.role }}</span>
                 <span v-if="selectedNpcState?.married" class="text-[10px] text-danger border border-danger/30 rounded-xs px-1 ml-1">
                   伴侣
@@ -214,6 +217,19 @@
                   知己
                 </span>
               </p>
+              <div v-if="editingNote" class="flex items-center space-x-1 mt-1">
+                <input
+                  ref="noteInputRef"
+                  v-model="noteInput"
+                  class="bg-bg border border-accent/30 rounded-xs px-1 py-0.5 text-xs text-text w-24 focus:border-accent outline-none placeholder:text-muted/40 transition-colors"
+                  :maxlength="NPC_NOTE_MAX_LENGTH"
+                  placeholder="备注"
+                  @keydown.enter="handleNoteEnter"
+                  @keydown.esc="cancelEditNote"
+                />
+                <Button class="btn-compact" @click="confirmEditNote">确认</Button>
+                <Button class="btn-compact" @click="cancelEditNote">取消</Button>
+              </div>
               <p class="text-[10px] text-muted/60 mt-0.5">
                 {{ selectedNpcDef?.personality }}
               </p>
@@ -299,8 +315,11 @@
             </div>
           </div>
 
+          <!-- 不在场：只读，可改备注 -->
+          <p v-if="!selectedInteractive && selectedAbsentReason" class="text-xs text-muted mb-3">{{ selectedAbsentReason }}</p>
+
           <!-- 对话 -->
-          <div class="mb-3 flex space-y-2 flex-wrap">
+          <div v-if="selectedInteractive" class="mb-3 flex space-y-2 flex-wrap">
             <Button class="w-full" :icon="MessageCircle" :disabled="selectedNpcState?.talkedToday" @click="handleTalk">
               {{ selectedNpcState?.talkedToday ? '今天已聊过' : '聊天' }}
             </Button>
@@ -329,7 +348,12 @@
 
           <!-- 恋爱/求婚面板 -->
           <div
-            v-if="selectedNpcDef?.marriageable && !selectedNpcState?.married && selectedNpcDef.gender !== playerStore.gender"
+            v-if="
+              selectedInteractive &&
+              selectedNpcDef?.marriageable &&
+              !selectedNpcState?.married &&
+              selectedNpcDef.gender !== playerStore.gender
+            "
             class="border border-danger/20 rounded-xs p-2 mb-3"
           >
             <p class="text-xs text-danger/80 mb-1.5 flex items-center space-x-1">
@@ -396,6 +420,7 @@
           <!-- 知己面板（同性可婚NPC，未约会/未结婚） -->
           <div
             v-if="
+              selectedInteractive &&
               selectedNpcDef?.marriageable &&
               !selectedNpcState?.married &&
               !selectedNpcState?.dating &&
@@ -446,7 +471,7 @@
 
           <!-- 断缘确认 -->
           <div v-if="showZhijiDissolveConfirm" class="game-panel mb-3 border-accent/40">
-            <p class="text-xs text-danger mb-2">确定要与{{ selectedNpcDef?.name }}断缘吗？（花费10000文）</p>
+            <p class="text-xs text-danger mb-2">确定要与{{ selectedDisplayName }}断缘吗？（花费10000文）</p>
             <div class="flex space-x-2">
               <Button class="text-danger" @click="handleDissolveZhiji">确认</Button>
               <Button @click="showZhijiDissolveConfirm = false">取消</Button>
@@ -455,7 +480,7 @@
 
           <!-- 离婚确认 -->
           <div v-if="showDivorceConfirm" class="game-panel mb-3 border-danger/40">
-            <p class="text-xs text-danger mb-2">确定要与{{ selectedNpcDef?.name }}和离吗？（花费30000文）</p>
+            <p class="text-xs text-danger mb-2">确定要与{{ selectedDisplayName }}和离吗？（花费30000文）</p>
             <div class="flex space-x-2">
               <Button class="text-danger" @click="handleDivorce">确认</Button>
               <Button @click="showDivorceConfirm = false">取消</Button>
@@ -464,12 +489,12 @@
 
           <!-- 对话内容 -->
           <div v-if="dialogueText" class="game-panel mb-3 text-xs">
-            <p class="text-accent mb-1">「{{ selectedNpcDef?.name }}」</p>
+            <p class="text-accent mb-1">「{{ selectedDisplayName }}」</p>
             <p>{{ dialogueText }}</p>
           </div>
 
           <!-- 送礼 -->
-          <div>
+          <div v-if="selectedInteractive">
             <p class="text-xs text-muted mb-2">
               送礼（选择背包中的物品）
               <span v-if="npcStore.isBirthday(selectedNpc!)" class="text-danger">— 生日加成中!</span>
@@ -545,7 +570,7 @@
                 </div>
                 <div v-if="activeGiftReaction" class="border border-accent/10 rounded-xs p-2 mb-2">
                   <div class="flex items-center justify-between">
-                    <span class="text-xs text-muted">{{ selectedNpcDef?.name }}觉得</span>
+                    <span class="text-xs text-muted">{{ selectedDisplayName }}觉得</span>
                     <span class="text-xs" :class="activeGiftReaction.className">
                       {{ activeGiftReaction.text }}
                     </span>
@@ -553,7 +578,7 @@
                 </div>
                 <div class="flex flex-col space-y-1.5">
                   <Button :icon="Gift" class="w-full justify-center" @click="handleGift(activeGiftItem!.itemId, activeGiftItem!.quality)">
-                    赠送给{{ selectedNpcDef?.name }}
+                    赠送给{{ selectedDisplayName }}
                   </Button>
                 </div>
               </div>
@@ -566,7 +591,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, computed } from 'vue'
+  import { ref, computed, nextTick } from 'vue'
   import {
     MessageCircle,
     Heart,
@@ -580,18 +605,19 @@
     Users,
     Sparkles,
     Diamond,
-    MapPin
+    MapPin,
+    Pencil
   } from 'lucide-vue-next'
   import { useCookingStore } from '@/stores/useCookingStore'
   import { useGameStore } from '@/stores/useGameStore'
   import { useInventoryStore } from '@/stores/useInventoryStore'
-  import { useNpcStore, FRIENDSHIP_LEVEL_INFO, FRIENDSHIP_LEVEL_ORDER } from '@/stores/useNpcStore'
+  import { useNpcStore, FRIENDSHIP_LEVEL_INFO, FRIENDSHIP_LEVEL_ORDER, NPC_NOTE_MAX_LENGTH } from '@/stores/useNpcStore'
   import { usePlayerStore } from '@/stores/usePlayerStore'
   import { useTutorialStore } from '@/stores/useTutorialStore'
   import { useHiddenNpcStore } from '@/stores/useHiddenNpcStore'
   import { NPCS, getNpcById, getItemById, getHeartEventById } from '@/data'
   import { getHiddenNpcById } from '@/data/hiddenNpcs'
-  import { ACTION_TIME_COSTS, isNpcAvailable } from '@/data/timeConstants'
+  import { ACTION_TIME_COSTS, isNpcAvailable, getNpcUnavailableReason } from '@/data/timeConstants'
   import { getNpcSpot, getNpcSpotName, SPOT_NAMES, type NpcSpot } from '@/data/npcSchedule'
   import { TIP_NPC_LABELS } from '@/data/npcTips'
   import type { TipNpcId } from '@/data/npcTips'
@@ -655,12 +681,25 @@
 
   const selectedNpcDef = computed(() => (selectedNpc.value ? getNpcById(selectedNpc.value) : null))
   const selectedNpcState = computed(() => (selectedNpc.value ? npcStore.getNpcState(selectedNpc.value) : null))
+  const selectedDisplayName = computed(() => (selectedNpc.value ? npcStore.getNpcDisplayName(selectedNpc.value) : ''))
 
   const npcAvailable = (npcId: string): boolean => {
     const state = npcStore.getNpcState(npcId)
     if (state?.married) return true
     return isNpcAvailable(npcId, gameStore.day, gameStore.hour, gameStore.season)
   }
+
+  /** 打开详情时村民是否在场 */
+  const presentOnOpen = ref(false)
+
+  /** 详情可互动：打开时在场或此刻在场；否则只读，仍可改备注 */
+  const selectedInteractive = computed(() => presentOnOpen.value || (selectedNpc.value ? npcAvailable(selectedNpc.value) : false))
+
+  /** 不在场原因 */
+  const selectedAbsentReason = computed(() => {
+    if (!selectedNpc.value) return ''
+    return getNpcUnavailableReason(selectedNpc.value, gameStore.day, gameStore.hour, gameStore.season) ?? ''
+  })
 
   /** 某位村民此刻所在地点名（不在户外则为 null） */
   const npcSpotName = (npcId: string): string | null => {
@@ -676,7 +715,7 @@
       const spot = getNpcSpot(npc.id, gameStore.hour)
       if (!spot) continue
       const list = map.get(spot) ?? []
-      list.push(npc.name)
+      list.push(npcStore.getNpcDisplayName(npc.id))
       map.set(spot, list)
     }
     return [...map.entries()].map(([spot, names]) => ({
@@ -686,13 +725,44 @@
     }))
   })
 
+  /** 不在场的村民也能打开详情（只读），方便改备注 */
   const handleSelectNpc = (npcId: string) => {
-    if (npcAvailable(npcId)) {
-      selectedNpc.value = npcId
-      dialogueText.value = null
-      showDivorceConfirm.value = false
-      showZhijiDissolveConfirm.value = false
-    }
+    selectedNpc.value = npcId
+    presentOnOpen.value = npcAvailable(npcId)
+    dialogueText.value = null
+    showDivorceConfirm.value = false
+    showZhijiDissolveConfirm.value = false
+    activeGiftKey.value = null
+    editingNote.value = false
+  }
+
+  // === 村民备注 ===
+
+  const editingNote = ref(false)
+  const noteInput = ref('')
+  const noteInputRef = ref<HTMLInputElement | null>(null)
+
+  const startEditNote = () => {
+    if (!selectedNpc.value) return
+    noteInput.value = npcStore.getNpcNote(selectedNpc.value)
+    editingNote.value = true
+    void nextTick(() => noteInputRef.value?.focus())
+  }
+
+  /** 清空即删除备注 */
+  const confirmEditNote = () => {
+    if (selectedNpc.value) npcStore.setNpcNote(selectedNpc.value, noteInput.value)
+    editingNote.value = false
+  }
+
+  const cancelEditNote = () => {
+    editingNote.value = false
+  }
+
+  /** 输入法选词时的回车不算确认 */
+  const handleNoteEnter = (e: KeyboardEvent) => {
+    if (e.isComposing) return
+    confirmEditNote()
   }
 
   const heartCount = (npcId: string): number => {

@@ -76,7 +76,7 @@
             <span class="text-[10px] text-danger">{{ f.name }}</span>
             <span class="text-[10px] text-muted ml-1">{{ f.description }}</span>
           </div>
-          <div v-for="b in selectedDayEntry.birthdays" :key="b.npcName">
+          <div v-for="b in selectedDayEntry.birthdays" :key="b.npcId">
             <span class="text-[10px] text-success">{{ b.npcName }}的生日</span>
           </div>
         </div>
@@ -89,6 +89,7 @@
   import { ref, computed, watch } from 'vue'
   import { X, Calendar } from 'lucide-vue-next'
   import { useGameStore, SEASON_NAMES } from '@/stores/useGameStore'
+  import { useNpcStore } from '@/stores/useNpcStore'
   import { SEASON_EVENTS } from '@/data/events'
   import { NPCS } from '@/data/npcs'
   import { WEEKDAYS, WEEKDAY_NAMES } from '@/data/timeConstants'
@@ -98,6 +99,7 @@
   const emit = defineEmits<{ close: [] }>()
 
   const gameStore = useGameStore()
+  const npcStore = useNpcStore()
 
   const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter']
   const calendarSeason = ref<Season>(gameStore.season)
@@ -119,7 +121,10 @@
     const entries = []
     for (let d = 1; d <= 28; d++) {
       const festivals = SEASON_EVENTS.filter(e => e.season === s && e.day === d).map(e => ({ name: e.name, description: e.description }))
-      const birthdays = NPCS.filter(npc => npc.birthday?.season === s && npc.birthday?.day === d).map(npc => ({ npcName: npc.name }))
+      const birthdays = NPCS.filter(npc => npc.birthday?.season === s && npc.birthday?.day === d).map(npc => ({
+        npcId: npc.id,
+        npcName: npcStore.getNpcDisplayName(npc.id)
+      }))
       entries.push({
         day: d,
         festivals,

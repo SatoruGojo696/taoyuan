@@ -102,6 +102,8 @@ export interface EnchantmentDef {
 export interface OwnedWeapon {
   defId: string
   enchantmentId: string | null
+  /** 强化等级 0-10（缺省 0） */
+  enhance?: number
 }
 
 /** 箱子阶梯 */

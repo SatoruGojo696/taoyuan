@@ -184,7 +184,7 @@
             @click="activeWeaponIdx = idx"
           >
             <span class="text-xs" :class="idx === inventoryStore.equippedWeaponIndex ? 'text-accent' : ''">
-              {{ getWeaponDisplayName(weapon.defId, weapon.enchantmentId) }}
+              {{ inventoryStore.getEquipDisplayName('weapon', idx) }}
             </span>
             <span v-if="idx === inventoryStore.equippedWeaponIndex" class="text-xs text-accent">装备中</span>
             <span v-else class="text-xs text-muted">{{ getWeaponSellPrice(weapon.defId, weapon.enchantmentId) }}文</span>
@@ -214,7 +214,7 @@
             >
               <div class="min-w-0">
                 <span class="text-xs" :class="inventoryStore.equippedHatIndex === idx ? 'text-accent' : ''">
-                  {{ getHatById(hat.defId)?.name ?? hat.defId }}
+                  {{ inventoryStore.getEquipDisplayName('hat', idx) }}
                 </span>
                 <p class="text-[10px] text-muted truncate">
                   {{ getHatById(hat.defId)?.description }}
@@ -255,7 +255,7 @@
             >
               <div class="min-w-0">
                 <span class="text-xs" :class="inventoryStore.equippedShoeIndex === idx ? 'text-accent' : ''">
-                  {{ getShoeById(shoe.defId)?.name ?? shoe.defId }}
+                  {{ inventoryStore.getEquipDisplayName('shoe', idx) }}
                 </span>
                 <p class="text-[10px] text-muted truncate">
                   {{ getShoeById(shoe.defId)?.description }}
@@ -304,7 +304,7 @@
             >
               <div class="min-w-0">
                 <span class="text-xs" :class="isRingEquipped(idx) ? 'text-accent' : ''">
-                  {{ getRingById(ring.defId)?.name ?? ring.defId }}
+                  {{ inventoryStore.getEquipDisplayName('ring', idx) }}
                 </span>
                 <p class="text-[10px] text-muted truncate">
                   {{ getRingById(ring.defId)?.description }}
@@ -659,7 +659,7 @@
             </div>
             <div class="flex items-center justify-between mt-0.5">
               <span class="text-xs text-muted">攻击力</span>
-              <span class="text-xs">{{ activeWeaponDef.attack }}</span>
+              <span class="text-xs">{{ activeWeaponAttack }}</span>
             </div>
             <div class="flex items-center justify-between mt-0.5">
               <span class="text-xs text-muted">暴击率</span>
@@ -680,10 +680,11 @@
             </Button>
             <Button
               v-if="activeWeaponIdx !== inventoryStore.equippedWeaponIndex && inventoryStore.ownedWeapons.length > 1"
-              class="w-full justify-center text-danger border-danger/40"
+              class="w-full justify-center"
+              :class="sellArmed ? '!bg-danger !text-text' : 'text-danger border-danger/40'"
               @click="handleSellWeapon"
             >
-              卖出 · {{ activeWeaponPrice }}文
+              {{ sellArmed ? '确认卖出' : '卖出' }} · {{ activeWeaponPrice }}文
             </Button>
             <p v-if="activeWeaponIdx === inventoryStore.equippedWeaponIndex" class="text-[10px] text-muted text-center">
               当前装备中，请先切换其他武器再卖出
@@ -704,14 +705,14 @@
           <button class="absolute top-2 right-2 text-muted hover:text-text" @click="activeRingIdx = null">
             <X :size="14" />
           </button>
-          <p class="text-sm text-accent mb-2">{{ activeRingDef.name }}</p>
+          <p class="text-sm text-accent mb-2">{{ getActiveEquipName('ring', activeRingIdx) }}</p>
           <div class="border border-accent/10 rounded-xs p-2 mb-2">
             <p class="text-xs text-muted">{{ activeRingDef.description }}</p>
           </div>
           <div class="border border-accent/10 rounded-xs p-2 mb-2">
             <div v-for="eff in activeRingDef.effects" :key="eff.type" class="flex items-center justify-between mt-0.5 first:mt-0">
               <span class="text-xs text-muted">{{ RING_EFFECT_NAMES[eff.type] ?? eff.type }}</span>
-              <span class="text-xs text-success">+{{ formatEffectValue(eff) }}</span>
+              <span class="text-xs text-success">{{ formatPieceEffect(eff, getActiveEnhance('ring', activeRingIdx)) }}</span>
             </div>
             <div class="flex items-center justify-between mt-0.5">
               <span class="text-xs text-muted">售价</span>
@@ -737,8 +738,12 @@
                 {{ inventoryStore.equippedRingSlot2 === activeRingIdx ? '卸下槽2' : '装备槽2' }}
               </Button>
             </div>
-            <Button class="w-full justify-center text-danger border-danger/40" @click="handleSellRing">
-              卖出 · {{ activeRingDef.sellPrice }}文
+            <Button
+              class="w-full justify-center"
+              :class="sellArmed ? '!bg-danger !text-text' : 'text-danger border-danger/40'"
+              @click="handleSellRing"
+            >
+              {{ sellArmed ? '确认卖出' : '卖出' }} · {{ activeRingDef.sellPrice }}文
             </Button>
           </div>
         </div>
@@ -756,14 +761,14 @@
           <button class="absolute top-2 right-2 text-muted hover:text-text" @click="activeHatIdx = null">
             <X :size="14" />
           </button>
-          <p class="text-sm text-accent mb-2">{{ activeHatDef.name }}</p>
+          <p class="text-sm text-accent mb-2">{{ getActiveEquipName('hat', activeHatIdx) }}</p>
           <div class="border border-accent/10 rounded-xs p-2 mb-2">
             <p class="text-xs text-muted">{{ activeHatDef.description }}</p>
           </div>
           <div class="border border-accent/10 rounded-xs p-2 mb-2">
             <div v-for="eff in activeHatDef.effects" :key="eff.type" class="flex items-center justify-between mt-0.5 first:mt-0">
               <span class="text-xs text-muted">{{ RING_EFFECT_NAMES[eff.type] ?? eff.type }}</span>
-              <span class="text-xs text-success">+{{ formatEffectValue(eff) }}</span>
+              <span class="text-xs text-success">{{ formatPieceEffect(eff, getActiveEnhance('hat', activeHatIdx)) }}</span>
             </div>
             <div class="flex items-center justify-between mt-0.5">
               <span class="text-xs text-muted">售价</span>
@@ -774,8 +779,12 @@
             <Button class="w-full justify-center" @click="handleToggleHatFromPopup">
               {{ inventoryStore.equippedHatIndex === activeHatIdx ? '卸下' : '装备' }}
             </Button>
-            <Button class="w-full justify-center text-danger border-danger/40" @click="handleSellHat">
-              卖出 · {{ activeHatDef.sellPrice }}文
+            <Button
+              class="w-full justify-center"
+              :class="sellArmed ? '!bg-danger !text-text' : 'text-danger border-danger/40'"
+              @click="handleSellHat"
+            >
+              {{ sellArmed ? '确认卖出' : '卖出' }} · {{ activeHatDef.sellPrice }}文
             </Button>
           </div>
         </div>
@@ -793,14 +802,14 @@
           <button class="absolute top-2 right-2 text-muted hover:text-text" @click="activeShoeIdx = null">
             <X :size="14" />
           </button>
-          <p class="text-sm text-accent mb-2">{{ activeShoeDef.name }}</p>
+          <p class="text-sm text-accent mb-2">{{ getActiveEquipName('shoe', activeShoeIdx) }}</p>
           <div class="border border-accent/10 rounded-xs p-2 mb-2">
             <p class="text-xs text-muted">{{ activeShoeDef.description }}</p>
           </div>
           <div class="border border-accent/10 rounded-xs p-2 mb-2">
             <div v-for="eff in activeShoeDef.effects" :key="eff.type" class="flex items-center justify-between mt-0.5 first:mt-0">
               <span class="text-xs text-muted">{{ RING_EFFECT_NAMES[eff.type] ?? eff.type }}</span>
-              <span class="text-xs text-success">+{{ formatEffectValue(eff) }}</span>
+              <span class="text-xs text-success">{{ formatPieceEffect(eff, getActiveEnhance('shoe', activeShoeIdx)) }}</span>
             </div>
             <div class="flex items-center justify-between mt-0.5">
               <span class="text-xs text-muted">售价</span>
@@ -811,8 +820,12 @@
             <Button class="w-full justify-center" @click="handleToggleShoeFromPopup">
               {{ inventoryStore.equippedShoeIndex === activeShoeIdx ? '卸下' : '装备' }}
             </Button>
-            <Button class="w-full justify-center text-danger border-danger/40" @click="handleSellShoe">
-              卖出 · {{ activeShoeDef.sellPrice }}文
+            <Button
+              class="w-full justify-center"
+              :class="sellArmed ? '!bg-danger !text-text' : 'text-danger border-danger/40'"
+              @click="handleSellShoe"
+            >
+              {{ sellArmed ? '确认卖出' : '卖出' }} · {{ activeShoeDef.sellPrice }}文
             </Button>
           </div>
         </div>
@@ -849,13 +862,14 @@
   import { useSkillStore } from '@/stores/useSkillStore'
   import { getItemById, getItemSource } from '@/data'
   import { getRecipeById } from '@/data/recipes'
-  import { getWeaponById, getWeaponDisplayName, getWeaponSellPrice, getEnchantmentById, WEAPON_TYPE_NAMES } from '@/data/weapons'
+  import { getWeaponById, getWeaponSellPrice, getEnchantmentById, WEAPON_TYPE_NAMES } from '@/data/weapons'
   import { getRingById } from '@/data/rings'
   import { getHatById } from '@/data/hats'
   import { getShoeById } from '@/data/shoes'
+  import { getEnhancedAttack, scaleEffectValue, formatEquipmentEffectValue } from '@/data/enhance'
   import { QUALITY_NAMES } from '@/composables/useFarmActions'
   import { addLog } from '@/composables/useGameLog'
-  import type { Quality, RingEffectType, ItemCategory } from '@/types'
+  import type { Quality, RingEffectType, ItemCategory, EquipmentKind, EquipmentEffect } from '@/types'
 
   const inventoryStore = useInventoryStore()
   const playerStore = usePlayerStore()
@@ -1009,16 +1023,14 @@
 
   const equippedRing1Name = computed(() => {
     const idx = inventoryStore.equippedRingSlot1
-    const ring = inventoryStore.ownedRings[idx]
-    if (!ring) return null
-    return getRingById(ring.defId)?.name ?? null
+    if (!inventoryStore.ownedRings[idx]) return null
+    return inventoryStore.getEquipDisplayName('ring', idx)
   })
 
   const equippedRing2Name = computed(() => {
     const idx = inventoryStore.equippedRingSlot2
-    const ring = inventoryStore.ownedRings[idx]
-    if (!ring) return null
-    return getRingById(ring.defId)?.name ?? null
+    if (!inventoryStore.ownedRings[idx]) return null
+    return inventoryStore.getEquipDisplayName('ring', idx)
   })
 
   const isRingEquipped = (idx: number): boolean => {
@@ -1071,31 +1083,26 @@
     travel_speed: '旅行加速'
   }
 
-  const PERCENTAGE_EFFECTS: Set<RingEffectType> = new Set([
-    'crit_rate_bonus',
-    'vampiric',
-    'stamina_reduction',
-    'mining_stamina',
-    'farming_stamina',
-    'fishing_stamina',
-    'crop_quality_bonus',
-    'crop_growth_bonus',
-    'fish_quality_bonus',
-    'fishing_calm',
-    'sell_price_bonus',
-    'shop_discount',
-    'gift_friendship',
-    'monster_drop_bonus',
-    'exp_bonus',
-    'treasure_find',
-    'ore_bonus',
-    'luck',
-    'travel_speed'
-  ])
+  /** 效果数值（按强化等级放大） */
+  const formatPieceEffect = (eff: EquipmentEffect, enhance: number): string =>
+    formatEquipmentEffectValue(eff.type, scaleEffectValue(eff.type, eff.value, enhance))
 
-  const formatEffectValue = (eff: { type: RingEffectType; value: number }): string => {
-    if (PERCENTAGE_EFFECTS.has(eff.type)) return `${Math.round(eff.value * 100)}%`
-    return `${eff.value}`
+  /** 弹窗内装备的显示名（含强化等级） */
+  const getActiveEquipName = (kind: EquipmentKind, index: number | null): string =>
+    index === null ? '' : inventoryStore.getEquipDisplayName(kind, index)
+
+  /** 弹窗内装备的强化等级 */
+  const getActiveEnhance = (kind: EquipmentKind, index: number | null): number =>
+    index === null ? 0 : inventoryStore.getEnhanceLevel(kind, index)
+
+  /** 强化过的装备卖出需二次确认 */
+  const sellArmed = ref(false)
+
+  /** 首次点击卖出强化装备时只进入确认状态，返回 true 表示本次不卖 */
+  const armSellConfirm = (kind: EquipmentKind, index: number): boolean => {
+    if (sellArmed.value || inventoryStore.getEnhanceLevel(kind, index) <= 0) return false
+    sellArmed.value = true
+    return true
   }
 
   // === 武器弹窗 ===
@@ -1109,18 +1116,21 @@
     return getWeaponById(weapon.defId) ?? null
   })
 
-  const activeWeaponName = computed(() => {
-    if (activeWeaponIdx.value === null) return ''
-    const weapon = inventoryStore.ownedWeapons[activeWeaponIdx.value]
-    if (!weapon) return ''
-    return getWeaponDisplayName(weapon.defId, weapon.enchantmentId)
-  })
+  const activeWeaponName = computed(() => getActiveEquipName('weapon', activeWeaponIdx.value))
 
   const activeWeaponEnchant = computed(() => {
     if (activeWeaponIdx.value === null) return null
     const weapon = inventoryStore.ownedWeapons[activeWeaponIdx.value]
     if (!weapon?.enchantmentId) return null
     return getEnchantmentById(weapon.enchantmentId) ?? null
+  })
+
+  /** 面板攻击力（含附魔与强化） */
+  const activeWeaponAttack = computed(() => {
+    const def = activeWeaponDef.value
+    if (!def) return 0
+    const base = def.attack + (activeWeaponEnchant.value?.attackBonus ?? 0)
+    return getEnhancedAttack(base, getActiveEnhance('weapon', activeWeaponIdx.value))
   })
 
   const activeWeaponPrice = computed(() => {
@@ -1138,6 +1148,7 @@
 
   const handleSellWeapon = () => {
     if (activeWeaponIdx.value === null) return
+    if (armSellConfirm('weapon', activeWeaponIdx.value)) return
     const result = inventoryStore.sellWeapon(activeWeaponIdx.value)
     addLog(result.message)
     activeWeaponIdx.value = null
@@ -1167,6 +1178,7 @@
 
   const handleSellRing = () => {
     if (activeRingIdx.value === null) return
+    if (armSellConfirm('ring', activeRingIdx.value)) return
     const result = inventoryStore.sellRing(activeRingIdx.value)
     addLog(result.message)
     activeRingIdx.value = null
@@ -1176,9 +1188,8 @@
 
   const equippedHatName = computed(() => {
     const idx = inventoryStore.equippedHatIndex
-    const hat = inventoryStore.ownedHats[idx]
-    if (!hat) return null
-    return getHatById(hat.defId)?.name ?? null
+    if (!inventoryStore.ownedHats[idx]) return null
+    return inventoryStore.getEquipDisplayName('hat', idx)
   })
 
   const handleToggleHat = (idx: number) => {
@@ -1207,6 +1218,7 @@
 
   const handleSellHat = () => {
     if (activeHatIdx.value === null) return
+    if (armSellConfirm('hat', activeHatIdx.value)) return
     const result = inventoryStore.sellHat(activeHatIdx.value)
     addLog(result.message)
     activeHatIdx.value = null
@@ -1216,9 +1228,8 @@
 
   const equippedShoeName = computed(() => {
     const idx = inventoryStore.equippedShoeIndex
-    const shoe = inventoryStore.ownedShoes[idx]
-    if (!shoe) return null
-    return getShoeById(shoe.defId)?.name ?? null
+    if (!inventoryStore.ownedShoes[idx]) return null
+    return inventoryStore.getEquipDisplayName('shoe', idx)
   })
 
   const handleToggleShoe = (idx: number) => {
@@ -1247,10 +1258,16 @@
 
   const handleSellShoe = () => {
     if (activeShoeIdx.value === null) return
+    if (armSellConfirm('shoe', activeShoeIdx.value)) return
     const result = inventoryStore.sellShoe(activeShoeIdx.value)
     addLog(result.message)
     activeShoeIdx.value = null
   }
+
+  // 切换或关闭装备弹窗时，撤销卖出确认状态
+  watch([activeWeaponIdx, activeRingIdx, activeHatIdx, activeShoeIdx], () => {
+    sellArmed.value = false
+  })
 
   // === 临时背包 ===
 

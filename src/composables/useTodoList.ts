@@ -220,7 +220,7 @@ export const useTodoList = () => {
       list.push({
         id: `birthday-${npc.id}`,
         category: 'social',
-        text: `今天是${npc.name}的生日`,
+        text: `今天是${npcStore.getNpcDisplayName(npc.id)}的生日`,
         detail: state?.birthdayGiftGiven ? '生日礼已送' : '可额外送一份生日礼 ×4',
         urgency: state?.birthdayGiftGiven ? 'info' : 'urgent',
         panel: 'village'
@@ -233,7 +233,7 @@ export const useTodoList = () => {
       list.push({
         id: `birthday-soon-${b.npcId}`,
         category: 'social',
-        text: `${b.name}的生日快到了`,
+        text: `${npcStore.getNpcDisplayName(b.npcId)}的生日快到了`,
         detail: `还有 ${b.daysLeft} 天`,
         urgency: 'info',
         panel: 'village'
@@ -256,7 +256,7 @@ export const useTodoList = () => {
     // 配偶与子女
     const spouse = npcStore.getSpouse()
     if (spouse && !spouse.talkedToday) {
-      const name = getNpcById(spouse.npcId)?.name ?? '伴侣'
+      const name = getNpcById(spouse.npcId) ? npcStore.getNpcDisplayName(spouse.npcId) : '伴侣'
       list.push({
         id: 'social-spouse',
         category: 'social',
@@ -283,7 +283,7 @@ export const useTodoList = () => {
       list.push({
         id: `quest-${quest.id}`,
         category: 'quest',
-        text: done ? `可以交付：${quest.npcName}的委托` : `委托进行中：${quest.targetItemName}`,
+        text: done ? `可以交付：${npcStore.getNpcDisplayName(quest.npcId)}的委托` : `委托进行中：${quest.targetItemName}`,
         detail: done
           ? `剩 ${quest.daysRemaining} 天到期`
           : `${quest.collectedQuantity}/${quest.targetQuantity} · 剩 ${quest.daysRemaining} 天`,
@@ -340,13 +340,13 @@ export const useTodoList = () => {
 }
 
 /** 找出未来 N 天内过生日的村民 */
-const getUpcomingBirthdays = (season: string, day: number, withinDays: number): { npcId: string; name: string; daysLeft: number }[] => {
-  const result: { npcId: string; name: string; daysLeft: number }[] = []
+const getUpcomingBirthdays = (season: string, day: number, withinDays: number): { npcId: string; daysLeft: number }[] => {
+  const result: { npcId: string; daysLeft: number }[] = []
   for (const npc of NPCS) {
     if (!npc.birthday || npc.birthday.season !== season) continue
     const daysLeft = npc.birthday.day - day
     if (daysLeft > 0 && daysLeft <= withinDays) {
-      result.push({ npcId: npc.id, name: npc.name, daysLeft })
+      result.push({ npcId: npc.id, daysLeft })
     }
   }
   return result.sort((a, b) => a.daysLeft - b.daysLeft)

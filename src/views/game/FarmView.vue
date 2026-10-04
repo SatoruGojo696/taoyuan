@@ -199,6 +199,10 @@
                 class="absolute top-0 left-0 text-success drop-shadow-sm"
                 :class="{ 'left-2': plot.infested }"
               />
+              <!-- 地块等级：左侧中部，四角已被其他角标占用 -->
+              <span v-if="plot.level > 0" class="absolute left-0 top-1/2 -translate-y-1/2 px-px text-[10px] leading-none text-accent">
+                {{ plot.level }}
+              </span>
             </div>
           </button>
         </div>
@@ -260,6 +264,23 @@
               </span>
             </div>
             <p v-if="activePlot.giantCropGroup !== null" class="text-xs text-accent mb-2">收获可获得大量作物！</p>
+
+            <!-- 地块等级 -->
+            <div v-if="activePlot.state !== 'wasteland' || activePlot.level > 0" class="flex items-center justify-between mb-2">
+              <span class="text-xs text-accent">Lv.{{ activePlot.level }}</span>
+              <template v-if="activePlot.state !== 'wasteland'">
+                <Button
+                  v-if="activePlotUpgradeCost !== null"
+                  :icon-size="12"
+                  :icon="ArrowUp"
+                  :disabled="playerStore.money < activePlotUpgradeCost"
+                  @click="plotUpgradeTarget = { plotId: activePlot.id, greenhouse: false }"
+                >
+                  升级 {{ activePlotUpgradeCost }}文
+                </Button>
+                <span v-else class="text-xs text-muted">已满级</span>
+              </template>
+            </div>
 
             <!-- 操作列表 -->
             <div class="flex flex-col space-y-1 max-h-60 overflow-y-auto">
@@ -330,7 +351,7 @@
                     >
                       [{{ QUALITY_NAMES[seed.quality] }}]
                     </span>
-                    <span v-if="seed.regrowth" class="text-success ml-1">[多茬]</span>
+                    <span v-if="seed.regrowth" class="text-success ml-1">{{ regrowthTag(seed.maxHarvests) }}</span>
                   </span>
                   <span class="text-muted">×{{ seed.count }}</span>
                 </button>
@@ -413,7 +434,7 @@
               >
                 <span :class="seed.colorClass">
                   {{ seed.name }}
-                  <span v-if="seed.regrowth" class="text-success ml-1">[多茬]</span>
+                  <span v-if="seed.regrowth" class="text-success ml-1">{{ regrowthTag(seed.maxHarvests) }}</span>
                 </span>
                 <span class="text-muted">×{{ seed.count }}</span>
               </button>
@@ -895,13 +916,16 @@
             <button
               v-for="plot in farmStore.greenhousePlots"
               :key="plot.id"
-              class="aspect-square border border-accent/20 rounded-xs flex flex-col items-center justify-center cursor-pointer transition-colors hover:border-accent/60 hover:bg-panel/80 leading-tight"
+              class="aspect-square relative border border-accent/20 rounded-xs flex flex-col items-center justify-center cursor-pointer transition-colors hover:border-accent/60 hover:bg-panel/80 leading-tight"
               :class="getPlotDisplay(plot).color"
               :title="getPlotTooltip(plot)"
               @click="activeGhPlotId = plot.id"
             >
               <component :is="getPlotDisplay(plot).icon" :size="14" />
               <span v-if="plot.cropId" class="text-[10px] opacity-70 truncate max-w-full px-0.5">{{ getCropName(plot.cropId) }}</span>
+              <span v-if="plot.level > 0" class="absolute left-0 top-1/2 -translate-y-1/2 px-px text-[10px] leading-none text-accent">
+                {{ plot.level }}
+              </span>
             </button>
           </div>
         </div>
@@ -965,7 +989,7 @@
             >
               <span>
                 {{ seed.name }}
-                <span v-if="seed.regrowth" class="text-success ml-1">[多茬]</span>
+                <span v-if="seed.regrowth" class="text-success ml-1">{{ regrowthTag(seed.maxHarvests) }}</span>
               </span>
               <span class="text-muted">×{{ seed.count }}</span>
             </button>
@@ -1034,6 +1058,21 @@
             </div>
           </div>
 
+          <!-- 地块等级 -->
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-accent">Lv.{{ activeGhPlot.level }}</span>
+            <Button
+              v-if="activeGhPlotUpgradeCost !== null"
+              :icon-size="12"
+              :icon="ArrowUp"
+              :disabled="playerStore.money < activeGhPlotUpgradeCost"
+              @click="plotUpgradeTarget = { plotId: activeGhPlot.id, greenhouse: true }"
+            >
+              升级 {{ activeGhPlotUpgradeCost }}文
+            </Button>
+            <span v-else class="text-xs text-muted">已满级</span>
+          </div>
+
           <!-- 操作区：与农田地块弹窗同款可滚动列表，种子多了也翻得动 -->
           <div class="flex flex-col space-y-1 max-h-60 overflow-y-auto">
             <!-- 可收获 → 收获 -->
@@ -1057,7 +1096,7 @@
               >
                 <span>
                   {{ seed.name }}
-                  <span v-if="seed.regrowth" class="text-success ml-1">[多茬]</span>
+                  <span v-if="seed.regrowth" class="text-success ml-1">{{ regrowthTag(seed.maxHarvests) }}</span>
                 </span>
                 <span class="text-muted">×{{ seed.count }}</span>
               </button>
@@ -1089,6 +1128,40 @@
                 {{ wanwupuClosedReason }}
               </p>
             </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 地块升级确认弹窗（放在最后，叠在地块弹窗之上） -->
+    <Transition name="panel-fade">
+      <div
+        v-if="plotUpgradeTarget && plotUpgradeCost !== null"
+        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+        @click.self="plotUpgradeTarget = null"
+      >
+        <div class="game-panel max-w-xs w-full relative">
+          <button class="absolute top-2 right-2 text-muted hover:text-text" @click="plotUpgradeTarget = null">
+            <X :size="14" />
+          </button>
+          <p class="text-accent text-sm mb-2">升级地块</p>
+          <div class="border border-accent/10 rounded-xs p-2 mb-3">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-muted">费用</span>
+              <span :class="playerStore.money >= plotUpgradeCost ? 'text-success' : 'text-danger'">{{ plotUpgradeCost }}文</span>
+            </div>
+          </div>
+          <div class="flex space-x-2">
+            <Button class="flex-1" @click="plotUpgradeTarget = null">取消</Button>
+            <Button
+              class="flex-1 !bg-accent !text-bg"
+              :icon-size="12"
+              :icon="ArrowUp"
+              :disabled="playerStore.money < plotUpgradeCost"
+              @click="confirmPlotUpgrade"
+            >
+              确认升级
+            </Button>
           </div>
         </div>
       </div>
@@ -1131,7 +1204,7 @@
   import Divider from '@/components/game/Divider.vue'
   import { useBreedingStore } from '@/stores/useBreedingStore'
   import { useCookingStore } from '@/stores/useCookingStore'
-  import { useFarmStore } from '@/stores/useFarmStore'
+  import { useFarmStore, formatExhaustedLog } from '@/stores/useFarmStore'
   import { useGameStore, SEASON_NAMES } from '@/stores/useGameStore'
   import { useHomeStore } from '@/stores/useHomeStore'
   import { useInventoryStore } from '@/stores/useInventoryStore'
@@ -1170,7 +1243,7 @@
   } from '@/composables/useFarmActions'
   import type { SprinklerType, FertilizerType, FruitTreeType, WildTreeType, Quality } from '@/types'
   import type { SeedGenetics } from '@/types/breeding'
-  import { sfxHarvest, sfxPlant } from '@/composables/useAudio'
+  import { sfxBuy, sfxHarvest, sfxPlant } from '@/composables/useAudio'
 
   const { selectedSeed } = useFarmActions()
 
@@ -1388,6 +1461,34 @@
     return getFertilizerById(activePlot.value.fertilizer)?.name ?? activePlot.value.fertilizer
   })
 
+  // === 地块升级 ===
+
+  const activePlotUpgradeCost = computed(() => (activePlot.value ? farmStore.getPlotUpgradeCost(activePlot.value.level) : null))
+  const activeGhPlotUpgradeCost = computed(() => (activeGhPlot.value ? farmStore.getPlotUpgradeCost(activeGhPlot.value.level) : null))
+
+  /** 待确认升级的地块 */
+  const plotUpgradeTarget = ref<{ plotId: number; greenhouse: boolean } | null>(null)
+
+  const plotUpgradeCost = computed(() => {
+    const target = plotUpgradeTarget.value
+    if (!target) return null
+    const plot = (target.greenhouse ? farmStore.greenhousePlots : farmStore.plots)[target.plotId]
+    return plot ? farmStore.getPlotUpgradeCost(plot.level) : null
+  })
+
+  const confirmPlotUpgrade = () => {
+    const target = plotUpgradeTarget.value
+    const cost = plotUpgradeCost.value
+    plotUpgradeTarget.value = null
+    if (!target || cost === null) return
+    const result = farmStore.upgradePlot(target.plotId, target.greenhouse)
+    addLog(result.message)
+    if (result.success) {
+      sfxBuy()
+      showFloat(`-${cost}文`, 'danger')
+    }
+  }
+
   const canWater = computed(() => {
     if (!activePlot.value) return false
     return (activePlot.value.state === 'planted' || activePlot.value.state === 'growing') && !activePlot.value.watered
@@ -1441,6 +1542,9 @@
 
   const QUALITY_ORDER: Quality[] = ['normal', 'fine', 'excellent', 'supreme']
 
+  /** 多茬标签：带最大收获次数 */
+  const regrowthTag = (maxHarvests?: number): string => (maxHarvests ? `[多茬×${maxHarvests}]` : '[多茬]')
+
   const plantableSeeds = computed(() => {
     const result: {
       cropId: string
@@ -1451,6 +1555,7 @@
       colorClass: string
       regrowth: boolean
       regrowthDays?: number
+      maxHarvests?: number
     }[] = []
     for (const crop of getCropsBySeason(gameStore.season)) {
       for (const q of QUALITY_ORDER) {
@@ -1464,7 +1569,8 @@
             count,
             colorClass: cropValueColor(crop.sellPrice),
             regrowth: crop.regrowth ?? false,
-            regrowthDays: crop.regrowthDays
+            regrowthDays: crop.regrowthDays,
+            maxHarvests: crop.maxHarvests
           })
         }
       }
@@ -1728,6 +1834,7 @@
     }
     if (plot.infested) tip += ` [虫害${plot.infestedDays}天]`
     if (plot.weedy) tip += ` [杂草${plot.weedyDays}天]`
+    if (plot.level > 0) tip += ` [Lv.${plot.level}]`
     return tip
   }
 
@@ -2027,7 +2134,8 @@
       seedId: crop.seedId,
       name: crop.name,
       count: inventoryStore.getItemCount(crop.seedId),
-      regrowth: crop.regrowth ?? false
+      regrowth: crop.regrowth ?? false,
+      maxHarvests: crop.maxHarvests
     }))
   })
 
@@ -2065,10 +2173,11 @@
       quality = applyCropBlessing(quality)
       // 育种产量加成
       const yieldDouble = genetics && Math.random() < (genetics.yield / 100) * 0.3
-      const harvestQty = yieldDouble ? 2 : 1
+      // 地块等级：每级额外 +1（同作物同品质）
+      const harvestQty = (yieldDouble ? 2 : 1) + result.bonus
       inventoryStore.addItem(cropId, harvestQty, quality)
       const qualityLabel = quality !== 'normal' ? `(${QUALITY_NAMES[quality]})` : ''
-      const qtyLabel = yieldDouble ? '×2' : ''
+      const qtyLabel = harvestQty > 1 ? `×${harvestQty}` : ''
       sfxHarvest()
       showFloat(`+${cropDef?.name ?? cropId}${qtyLabel}${qualityLabel}`, 'success')
       let msg = `在温室收获了${cropDef?.name ?? cropId}${qtyLabel}${qualityLabel}！(-1体力)`
@@ -2095,25 +2204,31 @@
         }
       }
       addLog(msg)
+      if (result.exhausted) addLog(formatExhaustedLog([cropDef?.name ?? cropId]))
     }
     activeGhPlotId.value = null
   }
 
   const doGhBatchHarvest = () => {
     const skillStore = useSkillStore()
-    const results = farmStore.greenhouseBatchHarvest()
-    if (results.length === 0) return
-    let harvested = 0
+    // 先扣体力再收：体力不够时剩余地块保持可收获，不会收了却没进背包
+    const results = farmStore.greenhouseBatchHarvest(() => playerStore.consumeStamina(1))
+    if (results.length === 0) {
+      addLog('体力不足，无法收获。')
+      return
+    }
+    const harvested = results.length
     let seedsReturned = 0
     let totalBonusMoney = 0
-    for (const { cropId, genetics } of results) {
-      if (!playerStore.consumeStamina(1)) break
-      harvested++
+    const exhaustedCrops: string[] = []
+    for (const { cropId, genetics, bonus, exhausted } of results) {
       let quality = skillStore.rollCropQualityWithBonus(0)
       quality = applyCropBlessing(quality)
       const yieldDouble = genetics && Math.random() < (genetics.yield / 100) * 0.3
-      const harvestQty = yieldDouble ? 2 : 1
+      // 地块等级：每级额外 +1（同作物同品质）
+      const harvestQty = (yieldDouble ? 2 : 1) + bonus
       inventoryStore.addItem(cropId, harvestQty, quality)
+      if (exhausted) exhaustedCrops.push(getCropName(cropId))
       // 育种甜度加成
       if (genetics && genetics.sweetness > 0) {
         const cropDef = getCropById(cropId)
@@ -2135,13 +2250,12 @@
         if (breedingStore.addToBox(returned)) seedsReturned++
       }
     }
-    if (harvested > 0) {
-      sfxHarvest()
-      showFloat(`温室收获 ×${harvested}`, 'success')
-      let msg = `在温室一键收获了${harvested}株作物。(-${harvested}体力)`
-      if (totalBonusMoney > 0) msg += ` 甜度加成+${totalBonusMoney}文`
-      addLog(msg)
-    }
+    sfxHarvest()
+    showFloat(`温室收获 ×${harvested}`, 'success')
+    let msg = `在温室一键收获了${harvested}株作物。(-${harvested}体力)`
+    if (totalBonusMoney > 0) msg += ` 甜度加成+${totalBonusMoney}文`
+    addLog(msg)
+    if (exhaustedCrops.length > 0) addLog(formatExhaustedLog(exhaustedCrops))
     if (seedsReturned > 0) {
       addLog(`${seedsReturned}颗育种种子已回收到种子箱。`)
     }

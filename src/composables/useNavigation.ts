@@ -31,7 +31,8 @@ import {
   Landmark,
   Swords,
   Tent,
-  Waves
+  Waves,
+  Handshake
 } from 'lucide-vue-next'
 import { useNpcStore } from '@/stores/useNpcStore'
 
@@ -59,6 +60,7 @@ export type PanelKey =
   | 'hanhai'
   | 'fishpond'
   | 'cottage'
+  | 'trade'
 
 export const TABS: {
   key: PanelKey
@@ -79,6 +81,7 @@ export const TABS: {
   { key: 'fishpond', label: '鱼塘', icon: Waves },
   { key: 'village', label: '桃源村', icon: Users },
   { key: 'shop', label: '商圈', icon: Store },
+  { key: 'trade', label: '商会', icon: Handshake },
   { key: 'forage', label: '竹林', icon: TreePine },
   { key: 'fishing', label: '清溪', icon: Fish },
   { key: 'mining', label: '矿洞', icon: Pickaxe },

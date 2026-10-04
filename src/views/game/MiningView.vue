@@ -852,6 +852,7 @@
   import { ZONE_NAMES, getFloor, BOSS_MONSTERS } from '@/data'
   import { MAX_MINE_FLOOR } from '@/data/mine'
   import { getWeaponById, getEnchantmentById, getWeaponDisplayName, WEAPON_TYPE_NAMES } from '@/data/weapons'
+  import { formatEnhanceName } from '@/data/enhance'
   import { getRingById, getHatById, getShoeById } from '@/data'
   import type { EquipmentEffectType } from '@/types'
   import { ACTION_TIME_COSTS, STAMINA_WARN_RATIO, STAMINA_CRITICAL_RATIO } from '@/data/timeConstants'
@@ -1166,7 +1167,7 @@
   /** 武器信息 */
   const weaponDisplayName = computed(() => {
     const owned = inventoryStore.getEquippedWeapon()
-    return getWeaponDisplayName(owned.defId, owned.enchantmentId)
+    return formatEnhanceName(getWeaponDisplayName(owned.defId, owned.enchantmentId), owned.enhance)
   })
   const weaponTypeName = computed(() => {
     const owned = inventoryStore.getEquippedWeapon()

@@ -35,7 +35,7 @@
           </button>
 
           <p class="text-sm text-accent pr-6">
-            {{ selectedDef.name }}
+            {{ selectedDisplayName }}
             <span class="text-[10px] text-muted ml-0.5">{{ selectedDef.role }}</span>
           </p>
           <p class="text-[10px] text-muted/60 mb-2">在{{ SPOT_NAMES[spot] }}遇见</p>
@@ -62,7 +62,7 @@
 
           <!-- 对话内容 -->
           <div v-if="dialogueText" class="border border-accent/20 rounded-xs p-2 mb-2">
-            <p class="text-[10px] text-accent mb-1">「{{ selectedDef.name }}」</p>
+            <p class="text-[10px] text-accent mb-1">「{{ selectedDisplayName }}」</p>
             <p class="text-xs leading-relaxed">{{ dialogueText }}</p>
           </div>
 
@@ -173,7 +173,7 @@
       const state = npcStore.getNpcState(npcId)
       return {
         npcId,
-        name: getNpcById(npcId)?.name ?? npcId,
+        name: npcStore.getNpcDisplayName(npcId),
         hearts: Math.min(10, Math.floor((state?.friendship ?? 0) / 250)),
         talkedToday: state?.talkedToday ?? false,
         isBirthday: npcStore.isBirthday(npcId)
@@ -183,6 +183,7 @@
 
   const selectedDef = computed(() => (selected.value ? getNpcById(selected.value) : null))
   const selectedState = computed(() => (selected.value ? npcStore.getNpcState(selected.value) : null))
+  const selectedDisplayName = computed(() => (selected.value ? npcStore.getNpcDisplayName(selected.value) : ''))
 
   const close = () => {
     selected.value = null

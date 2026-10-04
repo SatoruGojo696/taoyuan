@@ -82,11 +82,18 @@ export const _registerDayLabelGetter = (fn: () => string) => {
   _dayLabelGetter = fn
 }
 
+/** 日志历史最大条数，超出后从头部裁剪 */
+const LOG_HISTORY_MAX = 300
+
 /** 添加日志消息（显示为 toast 通知，同时记录到历史） */
 export const addLog = (msg: string) => {
   Qmsg.info(msg)
   const dayLabel = _dayLabelGetter?.() ?? ''
   logHistory.value.push({ msg, dayLabel })
+  // 防止长时间游玩导致日志无限堆积，只保留最近 300 条
+  if (logHistory.value.length > LOG_HISTORY_MAX) {
+    logHistory.value.splice(0, logHistory.value.length - LOG_HISTORY_MAX)
+  }
   _perkChecker?.()
 }
 

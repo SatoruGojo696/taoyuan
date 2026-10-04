@@ -29,6 +29,9 @@ const isPaused = computed(() => manualPaused.value || blockers.value.size > 0)
 
 /** 登记/注销一个阻塞原因 */
 export const setClockBlocker = (reason: ClockBlocker, active: boolean) => {
+  const had = blockers.value.has(reason)
+  // 状态未变化则跳过，避免无谓重新赋值触发响应式传播
+  if (active === had) return
   if (active) blockers.value.add(reason)
   else blockers.value.delete(reason)
   // Set 的增删不会触发 ref 的深层响应，重新赋值确保 computed 更新

@@ -93,7 +93,7 @@
             >
               <div>
                 <span class="text-sm">{{ shop.name }}</span>
-                <span class="text-muted text-xs ml-2">{{ shop.npcName }}</span>
+                <span class="text-muted text-xs ml-2">{{ shopNpcName(shop.npcName) }}</span>
                 <span v-if="!isOpen(shop)" class="text-danger text-xs ml-2">{{ closedReason(shop) }}</span>
               </div>
               <ChevronRight v-if="isOpen(shop)" :size="14" class="text-muted" />
@@ -103,7 +103,7 @@
 
         <!-- ====== 万物铺 ====== -->
         <template v-else-if="shopStore.currentShopId === 'wanwupu'">
-          <ShopHeader name="万物铺" npc="陈伯" />
+          <ShopHeader name="万物铺" :npc="shopNpcName('陈伯')" />
 
           <!-- 当季种子 -->
           <h4 class="text-accent text-sm mb-2 mt-3">
@@ -321,7 +321,7 @@
 
         <!-- ====== 铁匠铺 ====== -->
         <template v-else-if="shopStore.currentShopId === 'tiejiangpu'">
-          <ShopHeader name="铁匠铺" npc="孙铁匠" />
+          <ShopHeader name="铁匠铺" :npc="shopNpcName('孙铁匠')" />
 
           <div class="flex flex-col space-y-2">
             <div
@@ -428,7 +428,7 @@
 
         <!-- ====== 镖局 ====== -->
         <template v-else-if="shopStore.currentShopId === 'biaoju'">
-          <ShopHeader name="镖局" npc="云飞" />
+          <ShopHeader name="镖局" :npc="shopNpcName('云飞')" />
 
           <!-- 武器 -->
           <h4 class="text-accent text-sm mb-2">
@@ -456,7 +456,7 @@
 
         <!-- ====== 渔具铺 ====== -->
         <template v-else-if="shopStore.currentShopId === 'yugupu'">
-          <ShopHeader name="渔具铺" npc="秋月" />
+          <ShopHeader name="渔具铺" :npc="shopNpcName('秋月')" />
 
           <!-- 鱼饵 -->
           <h4 class="text-accent text-sm mb-2">
@@ -554,7 +554,7 @@
 
         <!-- ====== 药铺 ====== -->
         <template v-else-if="shopStore.currentShopId === 'yaopu'">
-          <ShopHeader name="药铺" npc="林老" />
+          <ShopHeader name="药铺" :npc="shopNpcName('林老')" />
 
           <!-- 肥料 -->
           <h4 class="text-accent text-sm mb-2">
@@ -621,7 +621,7 @@
 
         <!-- ====== 绸缎庄 ====== -->
         <template v-else-if="shopStore.currentShopId === 'chouduanzhuang'">
-          <ShopHeader name="绸缎庄" npc="素素" />
+          <ShopHeader name="绸缎庄" :npc="shopNpcName('素素')" />
 
           <div class="flex flex-col space-y-2">
             <div
@@ -1056,6 +1056,8 @@
   import type { MarketTrend } from '@/data/market'
   import { useTutorialStore } from '@/stores/useTutorialStore'
   import { useAchievementStore } from '@/stores/useAchievementStore'
+  import { useNpcStore } from '@/stores/useNpcStore'
+  import { NPCS } from '@/data/npcs'
   import { WEATHER_TOTEMS } from '@/data/totems'
 
   const WOOD_PRICE = 50
@@ -1069,6 +1071,13 @@
   const gameStore = useGameStore()
   const tutorialStore = useTutorialStore()
   const achievementStore = useAchievementStore()
+  const npcStore = useNpcStore()
+
+  /** 店主显示名（含备注）；商铺数据只存了名字，按名字找村民 */
+  const shopNpcName = (name: string): string => {
+    const npc = NPCS.find(n => n.name === name)
+    return npc ? npcStore.getNpcDisplayName(npc.id) : name
+  }
 
   const tutorialHint = computed(() => {
     if (!tutorialStore.enabled || gameStore.year > 1) return null

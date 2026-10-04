@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { useGameStore, SEASON_NAMES, WEATHER_NAMES } from '@/stores/useGameStore'
 import { usePlayerStore } from '@/stores/usePlayerStore'
-import { useFarmStore } from '@/stores/useFarmStore'
+import { useFarmStore, formatExhaustedLog } from '@/stores/useFarmStore'
 import { useInventoryStore } from '@/stores/useInventoryStore'
 import { useSaveStore } from '@/stores/useSaveStore'
 import { useSkillStore } from '@/stores/useSkillStore'
@@ -508,10 +508,15 @@ export const handleEndDay = () => {
     addLog(`小满完成了${TOOL_NAMES[upgradeResult.toolType]}的升级！现在是${TIER_NAMES[upgradeResult.targetTier]}级。`)
   }
 
-  // 乌鸦袭击（在其他日常处理前）
-  const crowResult = farmStore.crowAttack()
-  if (crowResult.attacked) {
-    addLog(`乌鸦袭击了你的农场，一株${crowResult.cropName}被吃掉了！放个稻草人保护作物吧。`)
+  // 乌鸦袭击（在其他日常处理前）；狗看家时乌鸦被赶走
+  const guardDog = animalStore.hasPetAbility('guard') ? animalStore.pet : null
+  if (guardDog) {
+    if (animalStore.dogScaresOffCrow()) addLog(`${guardDog.name}赶走了乌鸦。`)
+  } else {
+    const crowResult = farmStore.crowAttack()
+    if (crowResult.attacked) {
+      addLog(`乌鸦袭击了你的农场，一株${crowResult.cropName}被吃掉了！放个稻草人保护作物吧。`)
+    }
   }
 
   // 虫害日志
@@ -534,11 +539,13 @@ export const handleEndDay = () => {
     addLog(`${pestResult.weedDeaths}株作物被杂草覆盖窒息而死！及时除草可以拯救作物。`)
   }
 
-  // 晨间随机事件（偷菜旁白）
+  // 晨间随机事件（偷菜旁白）；狗看家时糟蹋庄稼的事被拦下
   const morningEvent = rollMorningEvent()
   if (morningEvent) {
     if (morningEvent.type === 'choice') {
       showFarmEvent(morningEvent.event)
+    } else if (guardDog && morningEvent.effect?.type === 'loseCrop') {
+      addLog(`${guardDog.name}守住了庄稼。`)
     } else {
       addLog(morningEvent.message)
       applyMorningEffect(morningEvent.effect)
@@ -792,15 +799,20 @@ export const handleEndDay = () => {
       const harvestable = farmStore.plots.filter(p => p.state === 'harvestable')
       const harvestCount = Math.min(harvestable.length, 3)
       let harvested = 0
+      // 多茬作物收满后地块清空，单独记一条
+      const exhaustedNames: string[] = []
       for (let i = 0; i < harvestCount; i++) {
         if (inventoryStore.isFull) break
         const hResult = farmStore.harvestPlot(harvestable[i]!.id)
         if (hResult.cropId) {
-          inventoryStore.addItem(hResult.cropId, 1, 'normal')
+          // 地块等级：每级额外 +1，与主产出同为普通品质
+          inventoryStore.addItem(hResult.cropId, 1 + hResult.bonus, 'normal')
           harvested++
+          if (hResult.exhausted) exhaustedNames.push(getCropById(hResult.cropId)?.name ?? hResult.cropId)
         }
       }
       if (harvested > 0) addLog(`${spouseName}一早帮你收了${harvested}块地的庄稼。`)
+      if (exhaustedNames.length > 0) addLog(formatExhaustedLog(exhaustedNames))
     }
   }
 
@@ -816,12 +828,14 @@ export const handleEndDay = () => {
     addLog(`牲口棚孵化器中的蛋孵出了一只${barnIncubatorResult.hatched.name}！`)
   }
 
-  // 宠物每日更新
+  // 宠物每日更新：猫捕虫、叼物
   const petResult = animalStore.dailyPetUpdate()
+  const petName = animalStore.pet?.name ?? '宠物'
+  if (petResult.pestsCleared > 0) {
+    addLog(`${petName}抓掉了${petResult.pestsCleared}处虫害。`)
+  }
   if (petResult.item) {
-    const petName = animalStore.pet?.name ?? '宠物'
-    const itemDef2 = getItemById(petResult.item)
-    addLog(`${petName}叼回来一个${itemDef2?.name ?? petResult.item}。`)
+    addLog(`${petName}叼回了${getItemById(petResult.item)?.name ?? petResult.item}。`)
   }
 
   // 鱼塘每日更新

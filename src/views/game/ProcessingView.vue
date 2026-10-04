@@ -43,7 +43,7 @@
       <!-- 全局操作 -->
       <div class="flex items-center justify-between mb-2">
         <label class="flex items-center space-x-1 cursor-pointer select-none">
-          <input type="checkbox" v-model="onlyAvailable" class="accent-accent" />
+          <input type="checkbox" v-model="processingStore.onlyAvailable" class="accent-accent" />
           <span class="text-[10px] text-muted">只显示有材料的配方</span>
         </label>
         <Button v-if="totalReady > 0" class="py-0 px-1.5 text-[10px]" :icon="Package" :icon-size="10" @click="handleCollectAll()">
@@ -194,13 +194,18 @@
                 :class="entry.slot.ready ? 'border-success/30' : entry.slot.recipeId ? 'border-accent/20' : 'border-accent/10'"
               >
                 <span class="text-[10px] text-muted/50 mr-1 flex-shrink-0">{{ si + 1 }}</span>
+                <span v-if="processingStore.getSlotLevel(entry.slot) > 0" class="text-[10px] text-accent mr-1 flex-shrink-0">
+                  Lv.{{ processingStore.getSlotLevel(entry.slot) }}
+                </span>
                 <!-- 空闲 -->
                 <template v-if="!entry.slot.recipeId">
                   <span class="text-[10px] text-muted flex-1">空闲</span>
                 </template>
                 <!-- 已完成 -->
                 <template v-else-if="entry.slot.ready">
-                  <span class="text-[10px] text-success flex-1 truncate">{{ getRecipeOutputName(entry.slot.recipeId) }} 已完成</span>
+                  <span class="text-[10px] text-success flex-1 truncate">
+                    {{ getRecipeOutputName(entry.slot.recipeId) }}{{ getOutputQtyLabel(entry.slot) }} 已完成
+                  </span>
                   <button class="text-success hover:text-accent flex-shrink-0" @click="handleCollect(entry.originalIndex)">
                     <Package :size="12" />
                   </button>
@@ -215,6 +220,15 @@
                     <X :size="12" />
                   </button>
                 </template>
+                <!-- 设备升级入口：与单台视图共用升级弹窗 -->
+                <button
+                  v-if="processingStore.getSlotLevel(entry.slot) < MAX_MACHINE_LEVEL"
+                  class="text-muted hover:text-accent flex-shrink-0 ml-1"
+                  title="升级"
+                  @click="openMachineUpgrade(entry.originalIndex)"
+                >
+                  <ArrowUpCircle :size="12" />
+                </button>
               </div>
             </div>
           </div>
@@ -246,8 +260,24 @@
               :class="slot.ready ? 'border-success/30' : 'border-accent/20'"
             >
               <div class="flex items-center justify-between mb-1.5">
-                <span class="text-xs" :class="slot.ready ? 'text-success' : 'text-accent'">{{ station.name }}</span>
-                <button class="text-muted hover:text-danger" @click="handleRemoveMachine(originalIndex)">
+                <div class="flex items-center min-w-0">
+                  <span class="text-xs truncate" :class="slot.ready ? 'text-success' : 'text-accent'">{{ station.name }}</span>
+                  <span v-if="processingStore.getSlotLevel(slot) > 0" class="text-[10px] text-accent ml-1 flex-shrink-0">
+                    Lv.{{ processingStore.getSlotLevel(slot) }}
+                  </span>
+                  <span v-if="processingStore.getSlotLevel(slot) >= MAX_MACHINE_LEVEL" class="text-[10px] text-muted ml-1.5 flex-shrink-0">
+                    已满级
+                  </span>
+                  <button
+                    v-else
+                    class="flex items-center flex-shrink-0 ml-1.5 px-1.5 py-0.5 text-[10px] text-accent border border-accent/30 rounded-xs hover:bg-accent/5"
+                    @click="openMachineUpgrade(originalIndex)"
+                  >
+                    <ArrowUpCircle :size="12" class="mr-0.5" />
+                    升级
+                  </button>
+                </div>
+                <button class="text-muted hover:text-danger flex-shrink-0 ml-2" @click="requestRemoveMachine(originalIndex)">
                   <Trash2 :size="12" />
                 </button>
               </div>
@@ -278,7 +308,7 @@
                     </Button>
                   </div>
                   <p v-else class="text-xs text-muted">
-                    {{ onlyAvailable ? '没有材料足够的配方' : '无可用配方' }}
+                    {{ processingStore.onlyAvailable ? '没有材料足够的配方' : '无可用配方' }}
                   </p>
                 </template>
                 <!-- 其他机器：普通配方列表 -->
@@ -297,7 +327,7 @@
                     </Button>
                   </div>
                   <p v-else class="text-xs text-muted">
-                    {{ onlyAvailable ? '没有材料足够的配方' : '无可用配方' }}
+                    {{ processingStore.onlyAvailable ? '没有材料足够的配方' : '无可用配方' }}
                   </p>
                 </template>
               </div>
@@ -329,7 +359,7 @@
                   :icon-size="12"
                   @click="handleCollect(originalIndex)"
                 >
-                  收取 {{ getRecipeOutputName(slot.recipeId) }}
+                  收取 {{ getRecipeOutputName(slot.recipeId) }}{{ getOutputQtyLabel(slot) }}
                 </Button>
               </div>
             </div>
@@ -376,7 +406,7 @@
                 <span class="text-muted">{{ qr.count }}/{{ qr.recipe.inputQuantity }}</span>
               </Button>
               <p v-if="getSeedMakerQualityRecipes(taskModal.machineType).length === 0" class="text-xs text-muted text-center py-4">
-                {{ onlyAvailable ? '没有材料足够的配方' : '无可用配方' }}
+                {{ processingStore.onlyAvailable ? '没有材料足够的配方' : '无可用配方' }}
               </p>
             </div>
             <!-- 其他设备 -->
@@ -394,7 +424,7 @@
                 </span>
               </Button>
               <p v-if="getFilteredRecipes(taskModal.machineType).length === 0" class="text-xs text-muted text-center py-4">
-                {{ onlyAvailable ? '没有材料足够的配方' : '无可用配方' }}
+                {{ processingStore.onlyAvailable ? '没有材料足够的配方' : '无可用配方' }}
               </p>
             </div>
           </template>
@@ -569,6 +599,89 @@
       </div>
     </Transition>
 
+    <!-- 设备升级弹窗 -->
+    <Transition name="panel-fade">
+      <div v-if="upgradeSlot" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="closeMachineUpgrade">
+        <div class="game-panel max-w-xs w-full relative">
+          <button class="absolute top-2 right-2 text-muted hover:text-text" @click="closeMachineUpgrade">
+            <X :size="14" />
+          </button>
+
+          <p class="text-sm text-accent mb-2">
+            <ArrowUpCircle :size="14" class="inline mr-0.5" />
+            {{ getStationDisplayName(upgradeSlot.machineType) }} 升级
+          </p>
+
+          <template v-if="upgradeCost">
+            <div class="border border-accent/10 rounded-xs p-2 mb-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-muted">等级</span>
+                <span class="text-xs text-accent">Lv.{{ upgradeSlotLevel }} → Lv.{{ upgradeCost.level }}</span>
+              </div>
+              <div class="flex items-center justify-between mt-0.5">
+                <span class="text-xs text-muted">产出</span>
+                <span class="text-xs text-text">&times;{{ upgradeSlotLevel + 1 }} → &times;{{ upgradeCost.level + 1 }}</span>
+              </div>
+            </div>
+
+            <div class="border border-accent/10 rounded-xs p-2 mb-2">
+              <p class="text-xs text-muted mb-1">所需材料</p>
+              <div v-for="mat in upgradeCost.materials" :key="mat.itemId" class="flex items-center justify-between mb-1 last:mb-0">
+                <span class="text-xs text-muted">{{ getItemName(mat.itemId) }}</span>
+                <span class="text-xs" :class="getCombinedItemCount(mat.itemId) >= mat.quantity ? '' : 'text-danger'">
+                  {{ getCombinedItemCount(mat.itemId) }}/{{ mat.quantity }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between mt-0.5">
+                <span class="text-xs text-muted">铜钱</span>
+                <span class="text-xs" :class="playerStore.money >= upgradeCost.money ? '' : 'text-danger'">{{ upgradeCost.money }}文</span>
+              </div>
+            </div>
+
+            <div class="flex space-x-1">
+              <Button class="flex-1 justify-center" @click="closeMachineUpgrade">取消</Button>
+              <Button
+                class="flex-1 justify-center"
+                :class="{ '!bg-accent !text-bg': canUpgradeSlot }"
+                :icon="ArrowUpCircle"
+                :icon-size="12"
+                :disabled="!canUpgradeSlot"
+                @click="confirmMachineUpgrade"
+              >
+                确认升级
+              </Button>
+            </div>
+          </template>
+
+          <p v-else class="text-xs text-muted text-center">已满级</p>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 拆除确认（仅已升级设备） -->
+    <Transition name="panel-fade">
+      <div
+        v-if="removeConfirmSlot"
+        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+        @click.self="removeConfirmIndex = null"
+      >
+        <div class="game-panel max-w-xs w-full relative">
+          <button class="absolute top-2 right-2 text-muted hover:text-text" @click="removeConfirmIndex = null">
+            <X :size="14" />
+          </button>
+
+          <p class="text-sm text-danger mb-3">
+            拆除{{ getStationDisplayName(removeConfirmSlot.machineType) }} Lv.{{ processingStore.getSlotLevel(removeConfirmSlot) }}？
+          </p>
+
+          <div class="flex space-x-1">
+            <Button class="flex-1 justify-center" @click="removeConfirmIndex = null">取消</Button>
+            <Button class="flex-1 justify-center btn-danger" :icon="Trash2" :icon-size="12" @click="confirmRemoveMachine">确认拆除</Button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- 制造弹窗 -->
     <Transition name="panel-fade">
       <div v-if="craftModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="craftModal = null">
@@ -663,7 +776,7 @@
   import { ref, computed } from 'vue'
   import { Hammer, Trash2, Package, Boxes, X, ArrowUpCircle, Play, Pencil, ChevronUp, ChevronDown } from 'lucide-vue-next'
   import Button from '@/components/game/Button.vue'
-  import type { MachineType, AnimalBuildingType, ChestTier, Quality } from '@/types'
+  import type { MachineType, AnimalBuildingType, ChestTier, ProcessingSlot, Quality } from '@/types'
   import { QUALITY_NAMES } from '@/composables/useFarmActions'
   import { useAnimalStore } from '@/stores/useAnimalStore'
   import { useFarmStore } from '@/stores/useFarmStore'
@@ -676,6 +789,7 @@
   import { getCombinedItemCount, hasCombinedItem, removeCombinedItem } from '@/composables/useCombinedInventory'
   import {
     PROCESSING_MACHINES,
+    MAX_MACHINE_LEVEL,
     SPRINKLERS,
     FERTILIZERS,
     BAITS,
@@ -705,11 +819,10 @@
   const warehouseStore = useWarehouseStore()
 
   const activeTab = ref<'process' | 'craft'>('process')
-  const onlyAvailable = ref(false)
 
   const getFilteredRecipes = (machineType: MachineType) => {
     const recipes = processingStore.getAvailableRecipes(machineType)
-    if (!onlyAvailable.value) return recipes
+    if (!processingStore.onlyAvailable) return recipes
     return recipes.filter(r => r.inputItemId === null || hasCombinedItem(r.inputItemId, r.inputQuantity))
   }
 
@@ -740,7 +853,7 @@
         }
       }
       // 无任何品质库存时，仅在非筛选模式下显示一条（普通品质，不可用）
-      if (!hasAny && !onlyAvailable.value) {
+      if (!hasAny && !processingStore.onlyAvailable) {
         result.push({
           recipe,
           quality: 'normal' as Quality,
@@ -927,9 +1040,8 @@
   }
 
   const handleRemoveOne = (machineType: MachineType) => {
-    if (processingStore.removeOneFromStation(machineType)) {
-      addLog(`拆除了一台${getMachineName(machineType)}，制作材料已退还。`)
-    }
+    const index = processingStore.getStationRemoveIndex(machineType)
+    if (index !== null) requestRemoveMachine(index)
   }
 
   // === 工坊升级 ===
@@ -956,6 +1068,65 @@
     }
     showUpgradeConfirm.value = false
     showUpgradeModal.value = false
+  }
+
+  // === 设备升级 ===
+
+  /** 正在查看升级费用的设备（machines 原始下标） */
+  const upgradeIndex = ref<number | null>(null)
+
+  const upgradeSlot = computed(() => (upgradeIndex.value === null ? null : (processingStore.machines[upgradeIndex.value] ?? null)))
+
+  const upgradeSlotLevel = computed(() => (upgradeSlot.value ? processingStore.getSlotLevel(upgradeSlot.value) : 0))
+
+  const upgradeCost = computed(() => (upgradeSlot.value ? processingStore.getMachineUpgradeCost(upgradeSlotLevel.value + 1) : null))
+
+  const canUpgradeSlot = computed(() => upgradeIndex.value !== null && processingStore.canUpgradeMachine(upgradeIndex.value))
+
+  const openMachineUpgrade = (index: number) => {
+    upgradeIndex.value = index
+  }
+
+  const closeMachineUpgrade = () => {
+    upgradeIndex.value = null
+  }
+
+  const confirmMachineUpgrade = () => {
+    if (upgradeIndex.value === null) return
+    const result = processingStore.upgradeMachine(upgradeIndex.value)
+    upgradeIndex.value = null
+    addLog(result.message)
+    if (!result.success) return
+    sfxClick()
+    const tr = gameStore.advanceTime(ACTION_TIME_COSTS.craftMachine)
+    if (tr.message) addLog(tr.message)
+    if (tr.passedOut) handleEndDay()
+  }
+
+  // === 拆除确认（已升级设备） ===
+
+  /** 待确认拆除的设备（machines 原始下标） */
+  const removeConfirmIndex = ref<number | null>(null)
+
+  const removeConfirmSlot = computed(() =>
+    removeConfirmIndex.value === null ? null : (processingStore.machines[removeConfirmIndex.value] ?? null)
+  )
+
+  /** 拆除入口：已升级设备先确认，其余直接拆 */
+  const requestRemoveMachine = (index: number) => {
+    const slot = processingStore.machines[index]
+    if (!slot) return
+    if (processingStore.getSlotLevel(slot) > 0) {
+      removeConfirmIndex.value = index
+      return
+    }
+    handleRemoveMachine(index)
+  }
+
+  const confirmRemoveMachine = () => {
+    const index = removeConfirmIndex.value
+    removeConfirmIndex.value = null
+    if (index !== null) handleRemoveMachine(index)
   }
 
   // === 制造弹窗 ===
@@ -1254,6 +1425,17 @@
     return PROCESSING_MACHINES.find(m => m.id === type)?.name ?? type
   }
 
+  /** 加工站显示名（玩家改过名则用自定义名） */
+  const getStationDisplayName = (type: MachineType): string => {
+    return processingStore.getStationName(type, getMachineName(type))
+  }
+
+  /** 槽位产出数量标签：多于 1 份时显示「×N」 */
+  const getOutputQtyLabel = (slot: ProcessingSlot): string => {
+    const qty = processingStore.getSlotOutputQuantity(slot)
+    return qty > 1 ? `×${qty}` : ''
+  }
+
   const getItemName = (id: string): string => {
     return getItemById(id)?.name ?? id
   }
@@ -1520,22 +1702,26 @@
     }
   }
 
-  /** 单台视图：拆除指定的那一台 */
+  /** 拆除指定的那一台（单台视图的垃圾桶与加工站的「拆除一台」共用） */
   const handleRemoveMachine = (slotIndex: number) => {
     const slot = processingStore.machines[slotIndex]
     if (!slot) return
-    const name = getMachineName(slot.machineType)
+    const level = processingStore.getSlotLevel(slot)
+    const name = getMachineName(slot.machineType) + (level > 0 ? ` Lv.${level}` : '')
     if (processingStore.removeMachine(slotIndex)) {
       addLog(`拆除了${name}，制作材料已退还。`)
     }
   }
 
   const handleCollect = (slotIndex: number) => {
+    const slot = processingStore.machines[slotIndex]
+    // 收取前先算好数量，收取后槽位会被重置
+    const qtyLabel = slot ? getOutputQtyLabel(slot) : ''
     const outputId = processingStore.collectProduct(slotIndex)
     if (outputId) {
       sfxClick()
       const name = getItemById(outputId)?.name ?? outputId
-      addLog(`收取了${name}！`)
+      addLog(`收取了${name}${qtyLabel}。`)
     }
   }
 

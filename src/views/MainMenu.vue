@@ -92,6 +92,7 @@
               关于游戏
             </Button>
             <Button
+              v-if="!Capacitor.isNativePlatform() && !isElectron"
               class="flex-1 justify-center"
               :class="{ '!bg-accent !text-bg': aboutTab === 'author' }"
               :icon="UserRound"
@@ -126,8 +127,8 @@
               </a>
             </div>
           </div>
-          <!-- 赞助作者 -->
-          <div v-if="aboutTab === 'author'" class="flex flex-col space-y-3 text-sm">
+          <!-- 赞助作者（安卓原生平台和 Electron 桌面端隐藏，避免计费内容审核问题） -->
+          <div v-if="aboutTab === 'author' && !Capacitor.isNativePlatform() && !isElectron" class="flex flex-col space-y-3 text-sm">
             <p class="text-xs text-muted">如果你喜欢这款游戏，可以请作者喝杯奶茶、吃顿 KFC，你的支持是作者继续更新的最大动力！</p>
             <div class="flex space-x-3">
               <div class="flex-1 border border-accent/20 rounded-xs p-3">
@@ -383,6 +384,9 @@
   import { useTutorialStore } from '@/stores/useTutorialStore'
   import type { FarmMapType, Gender } from '@/types'
   import { Capacitor } from '@capacitor/core'
+
+  /** 是否在 Electron 桌面端 */
+  const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron')
 
   const router = useRouter()
   const { startBgm } = useAudio()

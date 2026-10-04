@@ -29,7 +29,7 @@ import { useInventoryStore } from './useInventoryStore'
 import { useGameStore } from './useGameStore'
 import { usePlayerStore } from './usePlayerStore'
 import { useCookingStore } from './useCookingStore'
-import { useFarmStore } from './useFarmStore'
+import { useFarmStore, formatExhaustedLog } from './useFarmStore'
 import { useAnimalStore } from './useAnimalStore'
 import { useFishPondStore } from './useFishPondStore'
 import { useFishingStore } from './useFishingStore'
@@ -53,6 +53,9 @@ export const FRIENDSHIP_LEVEL_INFO: Record<FriendshipLevel, { name: string; min:
 
 /** 好感等级顺序（由低到高） */
 export const FRIENDSHIP_LEVEL_ORDER: FriendshipLevel[] = ['stranger', 'acquaintance', 'friendly', 'bestFriend']
+
+/** 村民备注最多字数 */
+export const NPC_NOTE_MAX_LENGTH = 8
 
 export const useNpcStore = defineStore('npc', () => {
   const npcStates = ref<NpcState[]>(
@@ -265,24 +268,37 @@ export const useNpcStore = defineStore('npc', () => {
           const count = Math.min(harvestable.length, Math.floor(5 * efficiency))
           // 按作物名统计，让玩家清楚到底收回来了什么，而不是只看到一句「收了N块地」
           const collected = new Map<string, number>()
-          let lost = 0
+          // 多茬作物收满后地块清空，单独记一条
+          const exhaustedNames: string[] = []
+          let leftInField = 0
           for (let i = 0; i < count; i++) {
+            // 主背包和临时背包都满了就不再下地：作物留在田里，不会收了却放不进背包
+            if (inventoryStore.isAllFull) {
+              leftInField = count - i
+              break
+            }
             const result = farmStore.harvestPlot(harvestable[i]!.id)
             if (!result.cropId) continue
             const itemName = getItemById(result.cropId)?.name ?? result.cropId
-            if (inventoryStore.addItem(result.cropId, 1, 'normal')) {
-              collected.set(itemName, (collected.get(itemName) ?? 0) + 1)
-            } else {
-              lost++
+            // 地块等级：每级额外 +1，与主产出同为普通品质
+            const quantity = 1 + result.bonus
+            if (inventoryStore.addItem(result.cropId, quantity, 'normal')) {
+              collected.set(itemName, (collected.get(itemName) ?? 0) + quantity)
             }
+            if (result.exhausted) exhaustedNames.push(itemName)
           }
+          const wageLabel = `(-${helper.dailyWage}文)`
+          const leftLabel = `背包放不下，${name}只好把${leftInField}份收成留在了田里。`
           if (collected.size > 0) {
             const detail = [...collected.entries()].map(([n, c]) => `${n}×${c}`).join('、')
-            messages.push(`${name}帮你收了${detail}，已放进背包。(-${helper.dailyWage}文)`)
+            messages.push(`${name}帮你收了${detail}，已放进背包。${wageLabel}`)
+            if (leftInField > 0) messages.push(leftLabel)
+          } else if (leftInField > 0) {
+            messages.push(`${leftLabel}${wageLabel}`)
           } else {
-            messages.push(`${name}今天没什么可收的——地里还没有成熟的作物。(-${helper.dailyWage}文)`)
+            messages.push(`${name}今天没什么可收的——地里还没有成熟的作物。${wageLabel}`)
           }
-          if (lost > 0) messages.push(`背包放不下，${name}只好把${lost}份收成留在了田里。`)
+          if (exhaustedNames.length > 0) messages.push(formatExhaustedLog(exhaustedNames))
           break
         }
         case 'collect': {
@@ -1222,6 +1238,50 @@ export const useNpcStore = defineStore('npc', () => {
     if (getZhiji()) daysZhiji.value++
   }
 
+  // ============================================================
+  // 村民备注
+  // ============================================================
+
+  /** 玩家给村民写的备注（npcId → 备注） */
+  const npcNotes = ref<Record<string, string>>({})
+
+  /** 规整备注：去首尾空白，按字截断 */
+  const normalizeNote = (note: string): string => Array.from(note.trim()).slice(0, NPC_NOTE_MAX_LENGTH).join('').trim()
+
+  /** 设置备注；规整后为空则删除 */
+  const setNpcNote = (npcId: string, note: string): void => {
+    const normalized = normalizeNote(note)
+    const next: Record<string, string> = {}
+    for (const [id, value] of Object.entries(npcNotes.value)) {
+      if (id !== npcId) next[id] = value
+    }
+    if (normalized) next[npcId] = normalized
+    npcNotes.value = next
+  }
+
+  /** 获取备注，无备注返回空串 */
+  const getNpcNote = (npcId: string): string => npcNotes.value[npcId] ?? ''
+
+  /** 界面显示名：有备注为「原名(备注)」；找不到村民返回 npcId */
+  const getNpcDisplayName = (npcId: string): string => {
+    const name = getNpcById(npcId)?.name
+    if (!name) return npcId
+    const note = npcNotes.value[npcId]
+    return note ? `${name}(${note})` : name
+  }
+
+  /** 读档：只保留字符串备注 */
+  const loadNpcNotes = (raw: unknown): Record<string, string> => {
+    if (!raw || typeof raw !== 'object') return {}
+    const result: Record<string, string> = {}
+    for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof value !== 'string') continue
+      const note = normalizeNote(value)
+      if (note) result[id] = note
+    }
+    return result
+  }
+
   const serialize = () => {
     return {
       npcStates: npcStates.value,
@@ -1239,6 +1299,7 @@ export const useNpcStore = defineStore('npc', () => {
       weddingCountdown: weddingCountdown.value,
       weddingNpcId: weddingNpcId.value,
       hiredHelpers: hiredHelpers.value,
+      npcNotes: npcNotes.value,
       friendshipVersion: 2
     }
   }
@@ -1307,6 +1368,7 @@ export const useNpcStore = defineStore('npc', () => {
     weddingCountdown.value = (data as any).weddingCountdown ?? 0
     weddingNpcId.value = (data as any).weddingNpcId ?? null
     hiredHelpers.value = (data as any).hiredHelpers ?? []
+    npcNotes.value = loadNpcNotes((data as any).npcNotes ?? {})
   }
 
   return {
@@ -1364,6 +1426,10 @@ export const useNpcStore = defineStore('npc', () => {
     isTipGivenToday,
     getDailyTip,
     tipGivenToday,
+    npcNotes,
+    setNpcNote,
+    getNpcNote,
+    getNpcDisplayName,
     PREGNANCY_STAGE_CONFIG,
     MEDICAL_PLANS,
     serialize,

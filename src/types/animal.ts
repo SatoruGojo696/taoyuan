@@ -101,6 +101,19 @@ export interface PetState {
   wasPetted: boolean
 }
 
+/** 宠物能力：叼物（猫狗通用）、看家（狗）、捕虫（猫） */
+export type PetAbilityId = 'fetch' | 'guard' | 'pest'
+
+export interface PetAbilityDef {
+  id: PetAbilityId
+  /** 能力标签名 */
+  name: string
+  /** 拥有该能力的宠物类型 */
+  petTypes: PetType[]
+  /** 解锁所需好感 */
+  unlockFriendship: number
+}
+
 export interface IncubationState {
   itemId: string
   animalType: AnimalType

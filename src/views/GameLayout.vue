@@ -8,13 +8,33 @@
     <StatusBar @request-sleep="showSleepConfirm = true" />
 
     <div class="flex space-x-1.5">
-      <Button class="flex-1 text-center justify-center !text-sm" :icon="Moon" :icon-size="12" @click.stop="showSleepConfirm = true">
+      <!-- 同一地点组内翻页（不产生移动耗时）。窄屏下只压缩面板名，箭头始终保留 -->
+      <button v-if="prevPanel" class="btn text-xs min-w-6 !pl-0.5 !pr-1.5" @click.stop="goPrevPanel">
+        <ChevronLeft :size="12" class="flex-shrink-0" />
+        <span class="truncate !ml-0">{{ prevPanel.label }}</span>
+      </button>
+      <Button
+        class="flex-1 text-center justify-center !text-sm whitespace-nowrap !px-2 md:!px-4"
+        :icon="Moon"
+        :icon-size="12"
+        @click.stop="showSleepConfirm = true"
+      >
         {{ sleepLabel }}
       </Button>
       <!-- 手动存档：与「休息」分开，随时可以落盘，不必熬到睡觉 -->
-      <Button class="text-center justify-center !text-sm" :icon="Save" :icon-size="12" :disabled="isSaving" @click.stop="handleManualSave">
+      <Button
+        class="text-center justify-center !text-sm whitespace-nowrap !px-2 md:!px-4"
+        :icon="Save"
+        :icon-size="12"
+        :disabled="isSaving"
+        @click.stop="handleManualSave"
+      >
         {{ isSaving ? '保存中' : '保存' }}
       </Button>
+      <button v-if="nextPanel" class="btn text-xs min-w-6 !pl-1.5 !pr-0.5" @click.stop="goNextPanel">
+        <span class="truncate">{{ nextPanel.label }}</span>
+        <ChevronRight :size="12" class="flex-shrink-0 !ml-0" />
+      </button>
     </div>
 
     <!-- 内容 -->
@@ -572,11 +592,14 @@
     Trash2,
     Save,
     ListChecks,
-    Package
+    Package,
+    ChevronLeft,
+    ChevronRight
   } from 'lucide-vue-next'
   import TodoPanel from '@/components/game/TodoPanel.vue'
   import InventoryView from '@/views/game/InventoryView.vue'
   import { useTodoList } from '@/composables/useTodoList'
+  import { usePanelPager } from '@/composables/usePanelPager'
   import Button from '@/components/game/Button.vue'
   import Divider from '@/components/game/Divider.vue'
   import MobileMapMenu from '@/components/game/MobileMapMenu.vue'
@@ -756,6 +779,9 @@
     return (route.name as string) ?? 'farm'
   })
 
+  /** 同组面板翻页 */
+  const { prevPanel, nextPanel, goPrevPanel, goNextPanel } = usePanelPager(currentPanel)
+
   const sleepLabel = computed(() => {
     if (gameStore.hour >= 24) return '倒头就睡'
     if (gameStore.hour >= 20) return '回家休息'
@@ -904,8 +930,8 @@
   /** 子女提议回应 */
   const proposalSpouseName = computed(() => {
     const spouse = npcStore.getSpouse()
-    if (!spouse) return '配偶'
-    return getNpcById(spouse.npcId)?.name ?? '配偶'
+    if (!spouse || !getNpcById(spouse.npcId)) return '配偶'
+    return npcStore.getNpcDisplayName(spouse.npcId)
   })
 
   const handleChildProposalResponse = (response: 'accept' | 'decline' | 'wait') => {

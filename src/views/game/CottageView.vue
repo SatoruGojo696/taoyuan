@@ -37,14 +37,14 @@
       <!-- 配偶互动 -->
       <div class="border border-accent/10 rounded-xs p-2 mb-2">
         <div class="flex items-center justify-between mb-1.5">
-          <span class="text-xs text-accent">{{ spouseDef?.name }}</span>
+          <span class="text-xs text-accent">{{ spouseDisplayName }}</span>
           <span class="text-[10px] text-danger">
             <Heart :size="10" class="inline" />
             伴侣
           </span>
         </div>
         <div v-if="spouseDialogue" class="border border-accent/10 rounded-xs p-2 mb-1.5">
-          <p class="text-[10px] text-accent mb-0.5">「{{ spouseDef?.name }}」</p>
+          <p class="text-[10px] text-accent mb-0.5">「{{ spouseDisplayName }}」</p>
           <p class="text-xs">{{ spouseDialogue }}</p>
         </div>
         <div class="flex space-x-1.5">
@@ -225,7 +225,7 @@
           class="flex items-center justify-between border border-accent/10 rounded-xs px-3 py-1.5"
         >
           <div>
-            <span class="text-xs text-accent">{{ getNpcById(h.npcId)?.name }}</span>
+            <span class="text-xs text-accent">{{ npcStore.getNpcDisplayName(h.npcId) }}</span>
             <span class="text-xs text-muted ml-1">{{ npcStore.HELPER_TASK_NAMES[h.task] }}</span>
           </div>
           <div class="flex items-center space-x-1.5">
@@ -392,7 +392,7 @@
       >
         <div class="game-panel max-w-sm w-full">
           <div class="flex items-center justify-between mb-2">
-            <p class="text-sm text-accent">送礼给{{ spouseDef?.name }}</p>
+            <p class="text-sm text-accent">送礼给{{ spouseDisplayName }}</p>
             <Button class="py-0 px-1" :icon="X" :icon-size="12" @click="showSpouseGiftModal = false" />
           </div>
           <div class="flex flex-col space-y-1 max-h-60 overflow-y-auto">
@@ -457,7 +457,7 @@
           <div v-if="hireConfirmNpc" class="border border-accent/30 rounded-xs p-3 mb-2">
             <p class="text-xs text-accent mb-2">
               确定雇佣
-              <span class="text-text">{{ hireConfirmNpc.name }}</span>
+              <span class="text-text">{{ npcStore.getNpcDisplayName(hireConfirmNpc.id) }}</span>
               负责
               <span class="text-text">{{ npcStore.HELPER_TASK_NAMES[selectedHireTask] }}</span>
               吗？
@@ -477,7 +477,7 @@
               class="flex items-center justify-between border border-accent/20 rounded-xs px-3 py-1.5 cursor-pointer hover:bg-accent/5"
               @click="hireConfirmNpcId = npc.npcId"
             >
-              <span class="text-xs">{{ npc.name }}</span>
+              <span class="text-xs">{{ npcStore.getNpcDisplayName(npc.npcId) }}</span>
               <span class="text-[10px] text-muted">
                 <Heart :size="10" class="inline" />
                 {{ Math.floor(npc.friendship / 250) }}心
@@ -499,7 +499,7 @@
         @click.self="dismissConfirmNpcId = null"
       >
         <div class="game-panel max-w-xs w-full text-center">
-          <p class="text-sm text-danger mb-3">确定解雇{{ getNpcById(dismissConfirmNpcId)?.name }}吗？</p>
+          <p class="text-sm text-danger mb-3">确定解雇{{ npcStore.getNpcDisplayName(dismissConfirmNpcId) }}吗？</p>
           <p class="text-xs text-muted mb-4">解雇后需要重新招募。</p>
           <div class="flex space-x-3 justify-center">
             <Button @click="dismissConfirmNpcId = null">取消</Button>
@@ -663,6 +663,7 @@
 
   const spouseState = computed(() => npcStore.getSpouse())
   const spouseDef = computed(() => (spouseState.value ? getNpcById(spouseState.value.npcId) : null))
+  const spouseDisplayName = computed(() => (spouseState.value ? npcStore.getNpcDisplayName(spouseState.value.npcId) : ''))
   const spouseDialogue = ref<string | null>(null)
 
   const handleSpouseTalk = () => {

@@ -58,7 +58,7 @@
           class="flex items-center justify-between border border-accent/20 rounded-xs px-3 py-1.5 cursor-pointer hover:bg-accent/5"
           @click="questModal = { type: 'board', questId: quest.id }"
         >
-          <p class="text-xs truncate min-w-0">{{ quest.description }}</p>
+          <p class="text-xs truncate min-w-0">{{ questDescription(quest) }}</p>
           <span class="text-xs text-accent whitespace-nowrap ml-2">{{ quest.moneyReward }}文</span>
         </div>
       </div>
@@ -76,7 +76,7 @@
       >
         <div class="min-w-0">
           <p class="text-xs truncate">
-            {{ questStore.specialOrder.description }}
+            {{ questDescription(questStore.specialOrder) }}
           </p>
         </div>
         <span class="text-xs text-accent whitespace-nowrap ml-2">{{ questStore.specialOrder.moneyReward }}文</span>
@@ -108,7 +108,7 @@
           @click="questModal = { type: 'active', questId: quest.id }"
         >
           <div class="flex items-center justify-between">
-            <p class="text-xs truncate min-w-0">{{ quest.description }}</p>
+            <p class="text-xs truncate min-w-0">{{ questDescription(quest) }}</p>
             <span class="text-xs whitespace-nowrap ml-2" :class="canSubmit(quest) ? 'text-success' : 'text-muted'">
               {{ canSubmit(quest) ? '可提交' : `剩${quest.daysRemaining}天` }}
             </span>
@@ -202,7 +202,7 @@
           <template v-if="questModal.type === 'board' && selectedBoardQuest">
             <p class="text-accent text-sm mb-2">委托详情</p>
             <p class="text-xs leading-relaxed mb-2">
-              {{ selectedBoardQuest.description }}
+              {{ questDescription(selectedBoardQuest) }}
             </p>
             <div class="border border-accent/10 rounded-xs p-2 mb-2">
               <p class="text-xs text-muted mb-1">目标</p>
@@ -235,7 +235,7 @@
               </span>
             </p>
             <p class="text-xs leading-relaxed mb-2">
-              {{ questStore.specialOrder.description }}
+              {{ questDescription(questStore.specialOrder) }}
             </p>
             <div class="border border-accent/10 rounded-xs p-2 mb-2">
               <p class="text-xs text-muted mb-1">目标</p>
@@ -275,7 +275,7 @@
               {{ selectedActiveQuest.type === 'special_order' ? '特殊订单' : '委托' }}
             </p>
             <p class="text-xs leading-relaxed mb-2">
-              {{ selectedActiveQuest.description }}
+              {{ questDescription(selectedActiveQuest) }}
             </p>
             <div class="border border-accent/10 rounded-xs p-2 mb-2">
               <p class="text-xs text-muted mb-1">进度</p>
@@ -334,15 +334,23 @@
   import Button from '@/components/game/Button.vue'
   import type { QuestInstance } from '@/types'
   import { useInventoryStore } from '@/stores/useInventoryStore'
+  import { useNpcStore } from '@/stores/useNpcStore'
   import { useQuestStore } from '@/stores/useQuestStore'
   import { getItemById, getStoryQuestById, CHAPTER_TITLES } from '@/data'
   import { addLog } from '@/composables/useGameLog'
 
   const questStore = useQuestStore()
   const inventoryStore = useInventoryStore()
+  const npcStore = useNpcStore()
 
   const getItemName = (id: string): string => {
     return getItemById(id)?.name ?? id
+  }
+
+  /** 委托描述：存档里拼好的委托人名换成显示名（含备注），不改存档 */
+  const questDescription = (quest: QuestInstance): string => {
+    if (!quest.npcName || !npcStore.getNpcNote(quest.npcId)) return quest.description
+    return quest.description.split(quest.npcName).join(npcStore.getNpcDisplayName(quest.npcId))
   }
 
   // === 弹窗状态 ===

@@ -64,7 +64,20 @@
           </div>
           <span class="text-[10px] text-muted">{{ animalStore.pet.friendship }}/1000</span>
         </div>
-        <p v-if="animalStore.pet.friendship >= 800" class="text-xs text-success mt-1">好感度很高，每天有机会叼回采集物！</p>
+        <div class="flex flex-wrap items-center mt-1.5">
+          <span
+            v-for="tag in petAbilityTags"
+            :key="tag.id"
+            class="text-[10px] border rounded-xs px-1 mr-1 flex items-center space-x-0.5"
+            :class="tag.unlocked ? 'text-success border-success/30' : 'text-muted/40 border-muted/10'"
+          >
+            <span>{{ tag.label }}</span>
+            <template v-if="!tag.unlocked">
+              <Heart :size="10" />
+              <span>{{ tag.unlockFriendship }}</span>
+            </template>
+          </span>
+        </div>
       </template>
       <div v-else class="flex flex-col items-center justify-center py-6 text-muted">
         <Home :size="32" class="mb-2" />
@@ -644,7 +657,7 @@
 
 <script setup lang="ts">
   import { ref, computed } from 'vue'
-  import { Hammer, ShoppingCart, Hand, Apple, Home, ArrowUp, Egg, X, Coins, Syringe, Pencil, Wheat, Sun } from 'lucide-vue-next'
+  import { Hammer, ShoppingCart, Hand, Apple, Home, ArrowUp, Egg, X, Coins, Syringe, Pencil, Wheat, Sun, Heart } from 'lucide-vue-next'
   import Button from '@/components/game/Button.vue'
   import { useAnimalStore } from '@/stores/useAnimalStore'
   import { useGameStore } from '@/stores/useGameStore'
@@ -652,8 +665,9 @@
   import { usePlayerStore } from '@/stores/usePlayerStore'
   import { ANIMAL_BUILDINGS, ANIMAL_DEFS, HAY_ITEM_ID, getItemById, getBuildingUpgrade, INCUBATION_MAP, FEED_DEFS } from '@/data'
   import { BUILDING_CAPACITY_PER_LEVEL } from '@/data/animals'
+  import { PET_ABILITIES, PET_PETTING_FRIENDSHIP, getPetFetchChance, getCatPestLimit, isPetAbilityUnlocked } from '@/data/pets'
   import { ACTION_TIME_COSTS } from '@/data/timeConstants'
-  import type { AnimalBuildingType, AnimalType, AnimalDef } from '@/types'
+  import type { AnimalBuildingType, AnimalType, AnimalDef, PetAbilityDef, PetAbilityId, PetState } from '@/types'
   import { addLog } from '@/composables/useGameLog'
   import { handleEndDay } from '@/composables/useEndDay'
   import { useTutorialStore } from '@/stores/useTutorialStore'
@@ -1001,9 +1015,10 @@
   }
 
   const handlePetThePet = () => {
-    const success = animalStore.petThePet()
-    if (success) {
-      addLog(`抚摸了${animalStore.pet?.name ?? '宠物'}，好感度+5。`)
+    const result = animalStore.petThePet()
+    if (result.success) {
+      const staminaText = result.staminaGained > 0 ? `，体力+${result.staminaGained}` : ''
+      addLog(`抚摸了${animalStore.pet?.name ?? '宠物'}，好感度+${PET_PETTING_FRIENDSHIP}${staminaText}。`)
       const tr = gameStore.advanceTime(ACTION_TIME_COSTS.petAnimal)
       if (tr.message) addLog(tr.message)
       if (tr.passedOut) handleEndDay()
@@ -1011,6 +1026,37 @@
       addLog('今天已经抚摸过了。')
     }
   }
+
+  // === 宠物能力 ===
+
+  interface PetAbilityTag {
+    id: PetAbilityId
+    label: string
+    unlocked: boolean
+    unlockFriendship: number
+  }
+
+  /** 已解锁能力的标签：叼物带当前概率，捕虫带每日处数 */
+  const getPetAbilityLabel = (ability: PetAbilityDef, current: PetState): string => {
+    if (ability.id === 'fetch') return `${ability.name} ${Math.round(getPetFetchChance(current.friendship) * 100)}%`
+    if (ability.id === 'pest') return `${ability.name} ${getCatPestLimit(current.friendship)}处`
+    return ability.name
+  }
+
+  /** 宠物卡能力标签：已解锁高亮，未解锁带好感门槛 */
+  const petAbilityTags = computed<PetAbilityTag[]>(() => {
+    const current = animalStore.pet
+    if (!current) return []
+    return PET_ABILITIES.filter(a => a.petTypes.includes(current.type)).map(a => {
+      const unlocked = isPetAbilityUnlocked(current.type, a.id, current.friendship)
+      return {
+        id: a.id,
+        label: unlocked ? getPetAbilityLabel(a, current) : a.name,
+        unlocked,
+        unlockFriendship: a.unlockFriendship
+      }
+    })
+  })
 
   const unpettedCount = computed(() => {
     let count = animalStore.animals.filter(a => !a.wasPetted).length
@@ -1024,9 +1070,10 @@
       addLog('体力不足，无法一键抚摸。')
       return
     }
-    const count = animalStore.petAllAnimals()
+    const { count, staminaGained } = animalStore.petAllAnimals()
     if (count > 0) {
-      addLog(`一口气抚摸了${count}只动物，大家都很开心！`)
+      const staminaText = staminaGained > 0 ? `体力+${staminaGained}。` : ''
+      addLog(`一口气抚摸了${count}只动物，大家都很开心！${staminaText}`)
       const tr = gameStore.advanceTime(ACTION_TIME_COSTS.batchPet)
       if (tr.message) addLog(tr.message)
       if (tr.passedOut) handleEndDay()
