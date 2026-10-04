@@ -17,6 +17,8 @@ jobs:
   build-electron:
     name: 构建 Electron (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +48,7 @@ jobs:
       - name: 构建 Electron
         run: |
           bun install
-          bun run build:electron --${{ matrix.platform }}
+          bun run build:electron --${{ matrix.platform }} --publish never
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
